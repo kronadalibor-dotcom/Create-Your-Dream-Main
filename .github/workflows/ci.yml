@@ -1,4 +1,70 @@
-# For syntax, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+name: Continuous Integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (android, arm64)
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { platform: android, arch: arm64, os: ubuntu-22.04 }
+        target-type: [template_debug]
+        float-precision: [single]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup godot-cpp
+        uses: ./godot-cpp/.github/actions/setup-godot-cpp
+        with:
+          platform: ${{ matrix.target.platform }}
+          em-version: 3.1.62
+
+      - name: Restore .scons_cache
+        uses: ./godot-cpp/.github/actions/godot-cache-restore
+        with:
+          scons-cache: ${{ github.workspace }}/.scons-cache/
+          cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
+
+      - name: Build GDExtension Debug Build
+        shell: sh
+        env:
+          SCONS_CACHE: ${{ github.workspace }}/.scons-cache/
+        run: |
+          scons target=${{ matrix.target-type }} platform=${{ matrix.target.platform }} arch=${{ matrix.target.arch }} precision=${{ matrix.float-precision }}
+
+      - name: Save .scons_cache
+        uses: ./godot-cpp/.github/actions/godot-cache-save
+        with:
+          scons-cache: ${{ github.workspace }}/.scons-cache/
+          cache-name: ${{ matrix.target.platform }}_${{ matrix.target.arch }}_${{ matrix.float-precision }}_${{ matrix.target-type }}
+
+      - name: Prepare Android Package for Phone
+        shell: sh
+        run: |
+          mkdir -p android_package
+          SO_FILE=$(find . -name "*.android.*.so" | head -n 1)
+          cp "$SO_FILE" android_package/libcyd_cpp.android.template_debug.arm64.so
+          printf '[configuration]\nentry_symbol = "example_library_init"\ncompatibility_minimum = "4.1"\nreloadable = true\n\n[libraries]\nandroid.debug.arm64 = "res://bin/libcyd_cpp.android.template_debug.arm64.so"\nandroid.release.arm64 = "res://bin/libcyd_cpp.android.template_debug.arm64.so"\n' > android_package/cyd_cpp.gdextension
+
+      - name: Upload Android Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: CYD-Android-CPP-Bin
+          path: android_package/*# For syntax, see https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
 # This workflow is automatically triggered for every push and pull request, to verify that everything still builds.
 
 name: Continuous Integration
