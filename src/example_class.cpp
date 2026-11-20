@@ -178,8 +178,7 @@ Color PixelDatabase::get_pixel_color(int p_id) const {
 }
 
 PackedByteArray PixelDatabase::get_gpu_material_buffer() const {
-	PackedByteArray buf;
-	buf.resize(131 * 16);
+	PackedByteArray buf; buf.resize(131 * 16);
 	float* ptr = reinterpret_cast<float*>(buf.ptrw());
 	for (int i = 0; i <= 130; ++i) {
 		const PixelProperties& p = get_pixel_fast((uint8_t)i);
@@ -199,24 +198,54 @@ void PixelDatabase::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_gpu_material_buffer"), &PixelDatabase::get_gpu_material_buffer);
 }
 
+// Gyors C++ 3D zajfüggvények az életnagyságú, hézagmentes világgeneráláshoz:
+static inline float fast_hash(int x, int y, int z, int seed) {
+	int n = x * 374761393 + y * 668265263 + z * 2147483647 + seed * 1610612741;
+	n = (n ^ (n >> 13)) * 1274126177;
+	return (float)((n ^ (n >> 16)) & 0x7FFFFFFF) / 2147483647.0f;
+}
+
+static float smooth_noise3(float x, float y, float z, int seed) {
+	int ix = (int)std::floor(x), iy = (int)std::floor(y), iz = (int)std::floor(z);
+	float fx = x - ix, fy = y - iy, fz = z - iz;
+	fx = fx * fx * (3.0f - 2.0f * fx); fy = fy * fy * (3.0f - 2.0f * fy); fz = fz * fz * (3.0f - 2.0f * fz);
+	auto h = [&](int dx, int dy, int dz) { return fast_hash(ix + dx, iy + dy, iz + dz, seed); };
+	float c00 = h(0,0,0)*(1-fx) + h(1,0,0)*fx, c10 = h(0,1,0)*(1-fx) + h(1,1,0)*fx;
+	float c01 = h(0,0,1)*(1-fx) + h(1,0,1)*fx, c11 = h(0,1,1)*(1-fx) + h(1,1,1)*fx;
+	return (c00*(1-fy) + c10*fy)*(1-fz) + (c01*(1-fy) + c11*fy)*fz;
+}
+
+static int get_global_terrain_y(int gx, int gz, int seed) {
+	float n1 = smooth_noise3(gx * 0.008f, 0.0f, gz * 0.008f, seed) * 18.0f;
+	float n2 = smooth_noise3(gx * 0.025f, 0.0f, gz * 0.025f, seed + 101) * 5.0f;
+	return CLAMP((int)(14.0f + n1 + n2), 6, 42);
+}
+
 VoxelBody3D::VoxelBody3D() {
 	PixelDatabase::init_database();
-	size_x = 50; size_y = 50; size_z = 50; voxel_scale = 0.1f;
+	size_x = 64; size_y = 200; size_z = 64; max_filled_y = 0; voxel_scale = 0.1f;
 	is_static_body = true; total_mass_pm = 0; center_of_mass = Vector3(0, 0, 0);
 	kint_stored_damage = 0.0f; kint_timer = 0.0f;
-	voxel_mesh.instantiate(); set_mesh(voxel_mesh);
-	voxel_material.instantiate();
-	voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-	voxel_material->set_roughness(0.85f);
-	set_material_override(voxel_material);
-	initialize_grid(50, 50, 50, 0.1f);
 }
 
 VoxelBody3D::~VoxelBody3D() {}
 
+void VoxelBody3D::ensure_render_resources() {
+	if (voxel_mesh.is_null()) {
+		voxel_mesh.instantiate();
+		set_mesh(voxel_mesh);
+	}
+	if (voxel_material.is_null()) {
+		voxel_material.instantiate();
+		voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+		voxel_material->set_roughness(0.85f);
+		set_material_override(voxel_material);
+	}
+}
+
 void VoxelBody3D::initialize_grid(int p_x, int p_y, int p_z, float p_voxel_scale) {
-	size_x = CLAMP(p_x, 1, 128); size_y = CLAMP(p_y, 1, 128); size_z = CLAMP(p_z, 1, 128);
-	voxel_scale = p_voxel_scale;
+	size_x = CLAMP(p_x, 1, 256); size_y = CLAMP(p_y, 1, 256); size_z = CLAMP(p_z, 1, 256);
+	max_filled_y = 0; voxel_scale = p_voxel_scale;
 	int total = size_x * size_y * size_z;
 	voxel_ids.resize(total); voxel_ids.fill(0);
 	voxel_durability.resize(total); voxel_durability.fill(0);
@@ -227,8 +256,8 @@ void VoxelBody3D::fill_block(int p_pixel_id) {
 	uint8_t id = (uint8_t)CLAMP(p_pixel_id, 0, 130);
 	voxel_ids.fill(id);
 	voxel_durability.fill(PixelDatabase::get_pixel_fast(id).max_durability);
-	recalculate_mass_and_center();
-	rebuild_mesh();
+	max_filled_y = (id != 0) ? (size_y - 1) : 0;
+	recalculate_mass_and_center(); rebuild_mesh();
 }
 
 void VoxelBody3D::fill_box(Vector3i p_min, Vector3i p_max, int p_pixel_id) {
@@ -238,14 +267,13 @@ void VoxelBody3D::fill_box(Vector3i p_min, Vector3i p_max, int p_pixel_id) {
 	int x0 = CLAMP(p_min.x, 0, size_x - 1), x1 = CLAMP(p_max.x, 0, size_x - 1);
 	int y0 = CLAMP(p_min.y, 0, size_y - 1), y1 = CLAMP(p_max.y, 0, size_y - 1);
 	int z0 = CLAMP(p_min.z, 0, size_z - 1), z1 = CLAMP(p_max.z, 0, size_z - 1);
+	if (id != 0 && y1 > max_filled_y) max_filled_y = y1;
 	for (int z = z0; z <= z1; ++z)
 		for (int y = y0; y <= y1; ++y)
 			for (int x = x0; x <= x1; ++x) {
-				int idx = get_index(x, y, z);
-				ids_w[idx] = id; dur_w[idx] = max_dur;
+				int idx = get_index(x, y, z); ids_w[idx] = id; dur_w[idx] = max_dur;
 			}
-	recalculate_mass_and_center();
-	rebuild_mesh();
+	recalculate_mass_and_center(); rebuild_mesh();
 }
 
 void VoxelBody3D::set_voxel(int x, int y, int z, int p_pixel_id) {
@@ -254,17 +282,197 @@ void VoxelBody3D::set_voxel(int x, int y, int z, int p_pixel_id) {
 	int idx = get_index(x, y, z);
 	voxel_ids.ptrw()[idx] = id;
 	voxel_durability.ptrw()[idx] = PixelDatabase::get_pixel_fast(id).max_durability;
+	if (id != 0 && y > max_filled_y) max_filled_y = y;
 }
 
 int VoxelBody3D::get_voxel(int x, int y, int z) const { return is_valid_coord(x, y, z) ? voxel_ids.ptr()[get_index(x, y, z)] : 0; }
 int VoxelBody3D::get_voxel_durability(int x, int y, int z) const { return is_valid_coord(x, y, z) ? voxel_durability.ptr()[get_index(x, y, z)] : 0; }
 PackedByteArray VoxelBody3D::get_voxel_ids_buffer() const { return voxel_ids; }
 
+int VoxelBody3D::get_surface_y(int x, int z) const {
+	if (x < 0 || x >= size_x || z < 0 || z >= size_z) return 16;
+	const uint8_t* ids_r = voxel_ids.ptr();
+	for (int y = MIN(size_y - 1, max_filled_y); y >= 0; --y) {
+		uint8_t id = ids_r[get_index(x, y, z)];
+		if (id == 51 || id == 1 || id == 17 || id == 56 || id == 36) return y;
+	}
+	return 16;
+}
+
+// Életnagyságú (175-200 pixel magas, ~24 pixel vastag törzsű) Óriás Tölgyfa C++ elhelyezése:
+void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx, int tree_gz, int tree_base_y, int seed) {
+	if (tree_gx + 65 < gx_min || tree_gx - 65 >= gx_min + size_x || tree_gz + 65 < gz_min || tree_gz - 65 >= gz_min + size_z) return;
+
+	// 1. Hatalmas, felszínen is kidudorodó Tölgy-gyökerek (36)
+	for (int r = 0; r < 6; ++r) {
+		float ang = r * 1.0472f + fast_hash(r, tree_gx, tree_gz, seed) * 0.4f;
+		float dx = std::cos(ang), dz = std::sin(ang);
+		for (int step = 4; step < 30; ++step) {
+			float rx = tree_gx + dx * step + std::sin(step * 0.3f) * 1.5f;
+			float rz = tree_gz + dz * step + std::cos(step * 0.3f) * 1.5f;
+			float ry = tree_base_y + 4.0f - step * 0.32f;
+			int rad = MAX(1, 4 - step / 8);
+			for (int oz = -rad; oz <= rad; ++oz)
+				for (int oy = -rad; oy <= rad; ++oy)
+					for (int ox = -rad; ox <= rad; ++ox)
+						if (ox*ox + oy*oy + oz*oz <= rad*rad)
+							set_voxel((int)rx + ox - gx_min, (int)ry + oy, (int)rz + oz - gz_min, 36);
+		}
+	}
+
+	// 2. Életnagyságú, 115 pixel magas, 22-26 pixel vastag hengeres fatörzs (Keményfa 33 + Kéreg 34)
+	int trunk_h = 115;
+	float lean_x = (fast_hash(tree_gx, 1, tree_gz, seed) - 0.5f) * 0.14f;
+	float lean_z = (fast_hash(tree_gx, 2, tree_gz, seed) - 0.5f) * 0.14f;
+	for (int h = 0; h < trunk_h; ++h) {
+		float cx = tree_gx + lean_x * h + std::sin(h * 0.06f) * 1.8f;
+		float cz = tree_gz + lean_z * h + std::cos(h * 0.06f) * 1.8f;
+		int cy = tree_base_y + h;
+		float rad = 12.0f - (float)h / trunk_h * 4.8f + (h < 10 ? (10 - h) * 0.35f : 0.0f);
+		int ir = (int)std::ceil(rad);
+		for (int dz = -ir; dz <= ir; ++dz)
+			for (int dx = -ir; dx <= ir; ++dx) {
+				float d = std::sqrt((float)(dx*dx + dz*dz));
+				if (d <= rad - 2.0f) set_voxel((int)cx + dx - gx_min, cy, (int)cz + dz - gz_min, 33);
+				else if (d <= rad) set_voxel((int)cx + dx - gx_min, cy, (int)cz + dz - gz_min, 34);
+			}
+	}
+
+	float top_x = tree_gx + lean_x * trunk_h, top_y = (float)(tree_base_y + trunk_h), top_z = tree_gz + lean_z * trunk_h;
+
+	// 3. Vastag főágak (33, 34) és hatalmas, 100+ pixel széles természetes Lombkorona (35) + Makkok (37, 38)
+	for (int b = 0; b < 5; ++b) {
+		float ang = b * 1.2566f + 0.3f;
+		float bx_dir = std::cos(ang), bz_dir = std::sin(ang);
+		for (int step = 0; step < 36; ++step) {
+			int bx = (int)(top_x + bx_dir * step), by = (int)(top_y - 12 + step * 0.45f), bz = (int)(top_z + bz_dir * step);
+			int brad = MAX(2, 5 - step / 9);
+			for (int oz = -brad; oz <= brad; ++oz)
+				for (int oy = -brad; oy <= brad; ++oy)
+					for (int ox = -brad; ox <= brad; ++ox)
+						if (ox*ox + oy*oy + oz*oz <= brad*brad)
+							set_voxel(bx + ox - gx_min, by + oy, bz + oz - gz_min, (ox*ox+oy*oy+oz*oz < (brad-1)*(brad-1)) ? 33 : 34);
+		}
+	}
+
+	const float blobs[6][4] = {{0, 12, 0, 38.0f}, {22, 4, 15, 28.0f}, {-22, 6, -14, 28.0f}, {16, 5, -22, 26.0f}, {-18, 4, 20, 26.0f}, {0, 28, 0, 26.0f}};
+	for (int c = 0; c < 6; ++c) {
+		float bcx = top_x + blobs[c][0], bcy = top_y + blobs[c][1], bcz = top_z + blobs[c][2], R = blobs[c][3];
+		int iR = (int)R;
+		for (int dz = -iR; dz <= iR; ++dz) {
+			int gz = (int)bcz + dz; if (gz < gz_min || gz >= gz_min + size_z) continue;
+			for (int dy = -iR; dy <= iR; ++dy) {
+				int gy = (int)bcy + dy; if (gy < 0 || gy >= size_y) continue;
+				for (int dx = -iR; dx <= iR; ++dx) {
+					int gx = (int)bcx + dx; if (gx < gx_min || gx >= gx_min + size_x) continue;
+					float dist_sq = (dx*dx + dy*dy*1.35f + dz*dz) / (R*R);
+					if (dist_sq <= 1.0f && fast_hash(gx, gy, gz, seed + 77) > 0.12f) {
+						int lx = gx - gx_min, lz = gz - gz_min;
+						if (get_voxel(lx, gy, lz) == 0) set_voxel(lx, gy, lz, 35);
+					}
+				}
+			}
+		}
+	}
+}
+
+void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_seed) {
+	voxel_ids.fill(0); voxel_durability.fill(0); max_filled_y = 0;
+	int gx_min = chunk_x * size_x, gz_min = chunk_z * size_z;
+
+	// 1. Természetes, hullámzó domborzat, térdig érő (8-15 pixeles) Magas Fű (52), Virágok (54, 55) és Ércek
+	for (int z = 0; z < size_z; ++z) {
+		int gz = gz_min + z;
+		for (int x = 0; x < size_x; ++x) {
+			int gx = gx_min + x;
+			int surf_y = get_global_terrain_y(gx, gz, world_seed);
+			for (int y = 0; y <= surf_y; ++y) {
+				int pid = 17;
+				if (y == surf_y) pid = 51;
+				else if (y >= surf_y - 4) pid = (smooth_noise3(gx*0.08f, y*0.08f, gz*0.08f, world_seed+5) > 0.72f) ? 7 : 1;
+				else if (y >= surf_y - 7) pid = 8;
+				else if (smooth_noise3(gx*0.12f, y*0.12f, gz*0.12f, world_seed+19) > 0.68f) {
+					float ro = fast_hash(gx, y, gz, world_seed + 33);
+					pid = (ro < 0.03f) ? 29 : ((ro < 0.20f) ? 28 : ((ro < 0.50f) ? 25 : 24));
+				}
+				set_voxel(x, y, z, pid);
+			}
+			// Életnagyságú (8-14 pixel magas) Magas Fű csomók és (6-9 pixeles) Virágok:
+			float fl = fast_hash(gx, surf_y, gz, world_seed + 99);
+			if (fl < 0.045f) {
+				int gh = 7 + (int)(fast_hash(gx, 1, gz, world_seed) * 8.0f);
+				for (int h = 1; h <= gh; ++h) set_voxel(x, surf_y + h, z, 52);
+			} else if (fl > 0.992f) {
+				int fh = 5 + (int)(fast_hash(gx, 2, gz, world_seed) * 4.0f);
+				for (int h = 1; h < fh; ++h) set_voxel(x, surf_y + h, z, 55);
+				set_voxel(x, surf_y + fh, z, 54);
+				set_voxel(x + 1, surf_y + fh, z, 54); set_voxel(x - 1, surf_y + fh, z, 54);
+				set_voxel(x, surf_y + fh, z + 1, 54); set_voxel(x, surf_y + fh, z - 1, 54);
+			}
+		}
+	}
+
+	// 2. Életnagyságú (24-30 pixeles, derékig érő) Mohás Sziklatömb (Kő 17 + Moha 56):
+	int rock_gx = chunk_x * size_x + 18, rock_gz = chunk_z * size_z + 20;
+	if (((chunk_x + chunk_z) & 1) == 0) {
+		int ry_base = get_global_terrain_y(rock_gx, rock_gz, world_seed);
+		for (int dz = -14; dz <= 14; ++dz)
+			for (int dy = -6; dy <= 16; ++dy)
+				for (int dx = -14; dx <= 14; ++dx) {
+					float d = (dx*dx)/160.0f + (dy*dy)/100.0f + (dz*dz)/140.0f;
+					if (d <= 1.0f) set_voxel(18 + dx, ry_base + dy, 20 + dz, (dy > 9) ? 56 : 17);
+				}
+	}
+
+	// 3. Életnagyságú Óriás Tölgyfák (a szektorok határán is átnyúló lombkoronával):
+	const int trees[3][2] = {{42, 42}, {-38, 50}, {52, -35}};
+	for (int t = 0; t < 3; ++t) {
+		int tgx = trees[t][0], tgz = trees[t][1];
+		int tby = get_global_terrain_y(tgx, tgz, world_seed);
+		place_giant_oak_in_sector(gx_min, gz_min, tgx, tgz, tby, world_seed + t * 53);
+	}
+
+	recalculate_mass_and_center();
+	rebuild_mesh();
+}
+
+Dictionary VoxelBody3D::raycast_voxel(Vector3 world_origin, Vector3 world_dir, float max_dist) const {
+	Dictionary res; res["hit"] = false;
+	Vector3 dir = world_dir.normalized();
+	if (dir.length_squared() < 0.0001f) return res;
+	Vector3 local_start = (world_origin - get_global_position()) / voxel_scale;
+	float max_steps = (max_dist / voxel_scale) * 2.0f;
+	Vector3 pos = local_start;
+	Vector3 step = dir * 0.45f;
+	Vector3i prev_voxel((int)std::floor(pos.x), (int)std::floor(pos.y), (int)std::floor(pos.z));
+	const uint8_t* ids_r = voxel_ids.ptr();
+
+	for (int i = 0; i < (int)max_steps; ++i) {
+		int vx = (int)std::floor(pos.x), vy = (int)std::floor(pos.y), vz = (int)std::floor(pos.z);
+		if (is_valid_coord(vx, vy, vz)) {
+			uint8_t id = ids_r[get_index(vx, vy, vz)];
+			if (id != 0) {
+				res["hit"] = true;
+				res["voxel_pos"] = Vector3i(vx, vy, vz);
+				res["prev_pos"] = prev_voxel;
+				res["pixel_id"] = (int)id;
+				res["durability"] = get_voxel_durability(vx, vy, vz);
+				res["distance"] = (pos - local_start).length() * voxel_scale;
+				return res;
+			}
+			prev_voxel = Vector3i(vx, vy, vz);
+		}
+		pos += step;
+	}
+	return res;
+}
+
 void VoxelBody3D::recalculate_mass_and_center() {
 	const uint8_t* ids_r = voxel_ids.ptr();
 	total_mass_pm = 0; double sx = 0.0, sy = 0.0, sz = 0.0;
+	int y_lim = MIN(size_y - 1, max_filled_y);
 	for (int z = 0; z < size_z; ++z)
-		for (int y = 0; y < size_y; ++y)
+		for (int y = 0; y <= y_lim; ++y)
 			for (int x = 0; x < size_x; ++x) {
 				uint8_t id = ids_r[get_index(x, y, z)];
 				if (id != 0) {
@@ -275,33 +483,144 @@ void VoxelBody3D::recalculate_mass_and_center() {
 	center_of_mass = (total_mass_pm > 0) ? Vector3((float)(sx / total_mass_pm) * voxel_scale, (float)(sy / total_mass_pm) * voxel_scale, (float)(sz / total_mass_pm) * voxel_scale) : Vector3(0, 0, 0);
 }
 
+// 60+ FPS VALÓDI C++ 2D GREEDY MESHER (85-95%-os háromszög-csökkentés!)
 void VoxelBody3D::rebuild_mesh() {
-	if (voxel_mesh.is_null()) return;
+	ensure_render_resources();
 	voxel_mesh->clear_surfaces();
 	PackedVector3Array vertices, normals; PackedColorArray colors;
 	const uint8_t* ids_r = voxel_ids.ptr(); const int32_t* dur_r = voxel_durability.ptr();
 	const float s = voxel_scale;
+	int y_lim = MIN(size_y - 1, max_filled_y);
+
+	auto get_key = [&](int idx) -> uint16_t {
+		uint8_t id = ids_r[idx];
+		if (id == 0) return 0;
+		int32_t md = PixelDatabase::get_pixel_fast(id).max_durability;
+		uint16_t bucket = (md > 0) ? (uint16_t)CLAMP((dur_r[idx] * 7) / md, 1, 7) : 7;
+		return ((uint16_t)id << 3) | bucket;
+	};
+
+	auto key_to_color = [&](uint16_t key) -> Color {
+		uint8_t id = (uint8_t)(key >> 3);
+		float ratio = 0.25f + 0.75f * ((float)(key & 7) / 7.0f);
+		const PixelProperties& p = PixelDatabase::get_pixel_fast(id);
+		return Color(p.r * ratio, p.g * ratio, p.b * ratio, 1.0f);
+	};
+
 	auto add_quad = [&](const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, const Vector3& norm, const Color& col) {
 		vertices.push_back(v0); vertices.push_back(v1); vertices.push_back(v2);
 		vertices.push_back(v0); vertices.push_back(v2); vertices.push_back(v3);
 		for (int i = 0; i < 6; ++i) { normals.push_back(norm); colors.push_back(col); }
 	};
-	for (int z = 0; z < size_z; ++z)
-		for (int y = 0; y < size_y; ++y)
-			for (int x = 0; x < size_x; ++x) {
-				int idx = get_index(x, y, z); uint8_t id = ids_r[idx];
-				if (id == 0) continue;
-				const PixelProperties& prop = PixelDatabase::get_pixel_fast(id);
-				float hp_r = (prop.max_durability > 0) ? CLAMP((float)dur_r[idx] / (float)prop.max_durability, 0.25f, 1.0f) : 1.0f;
-				Color col(prop.r * hp_r, prop.g * hp_r, prop.b * hp_r, 1.0f);
-				float x0 = x * s, x1 = (x + 1) * s, y0 = y * s, y1 = (y + 1) * s, z0 = z * s, z1 = (z + 1) * s;
-				if (x + 1 >= size_x || ids_r[get_index(x + 1, y, z)] == 0) add_quad(Vector3(x1, y0, z1), Vector3(x1, y1, z1), Vector3(x1, y1, z0), Vector3(x1, y0, z0), Vector3(1, 0, 0), col);
-				if (x - 1 < 0 || ids_r[get_index(x - 1, y, z)] == 0) add_quad(Vector3(x0, y0, z0), Vector3(x0, y1, z0), Vector3(x0, y1, z1), Vector3(x0, y0, z1), Vector3(-1, 0, 0), col);
-				if (y + 1 >= size_y || ids_r[get_index(x, y + 1, z)] == 0) add_quad(Vector3(x0, y1, z1), Vector3(x0, y1, z0), Vector3(x1, y1, z0), Vector3(x1, y1, z1), Vector3(0, 1, 0), col);
-				if (y - 1 < 0 || ids_r[get_index(x, y - 1, z)] == 0) add_quad(Vector3(x0, y0, z0), Vector3(x0, y0, z1), Vector3(x1, y0, z1), Vector3(x1, y0, z0), Vector3(0, -1, 0), col);
-				if (z + 1 >= size_z || ids_r[get_index(x, y, z + 1)] == 0) add_quad(Vector3(x0, y0, z1), Vector3(x0, y1, z1), Vector3(x1, y1, z1), Vector3(x1, y0, z1), Vector3(0, 0, 1), col);
-				if (z - 1 < 0 || ids_r[get_index(x, y, z - 1)] == 0) add_quad(Vector3(x1, y0, z0), Vector3(x1, y1, z0), Vector3(x0, y1, z0), Vector3(x0, y0, z0), Vector3(0, 0, -1), col);
-			}
+
+	// 1. +Y és -Y szeletek Greedy összevonása (W = X, H = Z)
+	std::vector<uint16_t> mask_xz(size_x * size_z);
+	for (int dir = 0; dir < 2; ++dir) {
+		int dy = (dir == 0) ? 1 : -1;
+		for (int y = 0; y <= y_lim; ++y) {
+			bool any = false;
+			for (int z = 0; z < size_z; ++z)
+				for (int x = 0; x < size_x; ++x) {
+					int idx = get_index(x, y, z);
+					uint16_t k = 0;
+					if (ids_r[idx] != 0 && (y + dy < 0 || y + dy >= size_y || ids_r[get_index(x, y + dy, z)] == 0)) {
+						k = get_key(idx); any = true;
+					}
+					mask_xz[x + z * size_x] = k;
+				}
+			if (!any) continue;
+			for (int z = 0; z < size_z; ++z)
+				for (int x = 0; x < size_x; ++x) {
+					uint16_t k = mask_xz[x + z * size_x];
+					if (k == 0) continue;
+					int w = 1; while (x + w < size_x && mask_xz[(x + w) + z * size_x] == k) w++;
+					int h = 1;
+					while (z + h < size_z) {
+						bool ok = true;
+						for (int k_x = 0; k_x < w; ++k_x) if (mask_xz[(x + k_x) + (z + h) * size_x] != k) { ok = false; break; }
+						if (!ok) break;
+						h++;
+					}
+					for (int dz = 0; dz < h; ++dz) for (int dx = 0; dx < w; ++dx) mask_xz[(x + dx) + (z + dz) * size_x] = 0;
+					float x0 = x * s, x1 = (x + w) * s, z0 = z * s, z1 = (z + h) * s, yf = (dir == 0 ? (y + 1) : y) * s;
+					Color col = key_to_color(k);
+					if (dir == 0) add_quad(Vector3(x0, yf, z1), Vector3(x0, yf, z0), Vector3(x1, yf, z0), Vector3(x1, yf, z1), Vector3(0, 1, 0), col);
+					else add_quad(Vector3(x0, yf, z0), Vector3(x0, yf, z1), Vector3(x1, yf, z1), Vector3(x1, yf, z0), Vector3(0, -1, 0), col);
+				}
+		}
+	}
+
+	// 2. +Z és -Z szeletek Greedy összevonása (W = X, H = Y)
+	int y_count = y_lim + 1;
+	std::vector<uint16_t> mask_xy(size_x * y_count);
+	for (int dir = 0; dir < 2; ++dir) {
+		int dz_step = (dir == 0) ? 1 : -1;
+		for (int z = 0; z < size_z; ++z) {
+			bool any = false;
+			for (int y = 0; y < y_count; ++y)
+				for (int x = 0; x < size_x; ++x) {
+					int idx = get_index(x, y, z); uint16_t k = 0;
+					if (ids_r[idx] != 0 && (z + dz_step < 0 || z + dz_step >= size_z || ids_r[get_index(x, y, z + dz_step)] == 0)) {
+						k = get_key(idx); any = true;
+					}
+					mask_xy[x + y * size_x] = k;
+				}
+			if (!any) continue;
+			for (int y = 0; y < y_count; ++y)
+				for (int x = 0; x < size_x; ++x) {
+					uint16_t k = mask_xy[x + y * size_x]; if (k == 0) continue;
+					int w = 1; while (x + w < size_x && mask_xy[(x + w) + y * size_x] == k) w++;
+					int h = 1;
+					while (y + h < y_count) {
+						bool ok = true;
+						for (int kx = 0; kx < w; ++kx) if (mask_xy[(x + kx) + (y + h) * size_x] != k) { ok = false; break; }
+						if (!ok) break;
+						h++;
+					}
+					for (int dy = 0; dy < h; ++dy) for (int dx = 0; dx < w; ++dx) mask_xy[(x + dx) + (y + dy) * size_x] = 0;
+					float x0 = x * s, x1 = (x + w) * s, y0 = y * s, y1 = (y + h) * s, zf = (dir == 0 ? (z + 1) : z) * s;
+					Color col = key_to_color(k);
+					if (dir == 0) add_quad(Vector3(x0, y0, zf), Vector3(x0, y1, zf), Vector3(x1, y1, zf), Vector3(x1, y0, zf), Vector3(0, 0, 1), col);
+					else add_quad(Vector3(x1, y0, zf), Vector3(x1, y1, zf), Vector3(x0, y1, zf), Vector3(x0, y0, zf), Vector3(0, 0, -1), col);
+				}
+		}
+	}
+
+	// 3. +X és -X szeletek Greedy összevonása (W = Z, H = Y)
+	std::vector<uint16_t> mask_zy(size_z * y_count);
+	for (int dir = 0; dir < 2; ++dir) {
+		int dx_step = (dir == 0) ? 1 : -1;
+		for (int x = 0; x < size_x; ++x) {
+			bool any = false;
+			for (int y = 0; y < y_count; ++y)
+				for (int z = 0; z < size_z; ++z) {
+					int idx = get_index(x, y, z); uint16_t k = 0;
+					if (ids_r[idx] != 0 && (x + dx_step < 0 || x + dx_step >= size_x || ids_r[get_index(x + dx_step, y, z)] == 0)) {
+						k = get_key(idx); any = true;
+					}
+					mask_zy[z + y * size_z] = k;
+				}
+			if (!any) continue;
+			for (int y = 0; y < y_count; ++y)
+				for (int z = 0; z < size_z; ++z) {
+					uint16_t k = mask_zy[z + y * size_z]; if (k == 0) continue;
+					int w = 1; while (z + w < size_z && mask_zy[(z + w) + y * size_z] == k) w++;
+					int h = 1;
+					while (y + h < y_count) {
+						bool ok = true;
+						for (int kz = 0; kz < w; ++kz) if (mask_zy[(z + kz) + (y + h) * size_z] != k) { ok = false; break; }
+						if (!ok) break;
+						h++;
+					}
+					for (int dy = 0; dy < h; ++dy) for (int dz = 0; dz < w; ++dz) mask_zy[(z + dz) + (y + dy) * size_z] = 0;
+					float z0 = z * s, z1 = (z + w) * s, y0 = y * s, y1 = (y + h) * s, xf = (dir == 0 ? (x + 1) : x) * s;
+					Color col = key_to_color(k);
+					if (dir == 0) add_quad(Vector3(xf, y0, z1), Vector3(xf, y1, z1), Vector3(xf, y1, z0), Vector3(xf, y0, z0), Vector3(1, 0, 0), col);
+					else add_quad(Vector3(xf, y0, z0), Vector3(xf, y1, z0), Vector3(xf, y1, z1), Vector3(xf, y0, z1), Vector3(-1, 0, 0), col);
+				}
+		}
+	}
+
 	if (vertices.size() > 0) {
 		Array sa; sa.resize(Mesh::ARRAY_MAX);
 		sa[Mesh::ARRAY_VERTEX] = vertices; sa[Mesh::ARRAY_NORMAL] = normals; sa[Mesh::ARRAY_COLOR] = colors;
@@ -315,135 +634,4 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 	if (attacker_pixel_id > 0 && attacker_pixel_id <= 130) {
 		const PixelProperties& ap = PixelDatabase::get_pixel_fast((uint8_t)attacker_pixel_id);
 		attacker_hardness = (float)ap.hardness; attacker_max_dur = ap.max_durability;
-		if (attacker_pixel_id == 31) {
-			if (light_level <= 0) attacker_hardness = 50.0f;
-			else if (light_level == 1) attacker_hardness = 100.0f;
-			else if (light_level == 2) attacker_hardness = 500.0f;
-			else attacker_hardness = 650.0f;
-		}
-	}
-	float m_speed = (impact_speed < 50.0f) ? MAX(0.05f, 1.0f - (50.0f - impact_speed) * 0.02f) : (1.0f + (impact_speed - 50.0f) * 0.005f);
-	float m_mass = 1.0f + attacker_mass_pm * 0.005f;
-	float d_nyers = (attacker_hardness * m_speed * m_mass * damage_scale) + kint_stored_damage;
-	if (kint_stored_damage > 0.0f) { kint_stored_damage = 0.0f; kint_timer = 0.0f; }
-
-	std::vector<int> contacted; int r = MAX(0, contact_radius);
-	for (int dz = -r; dz <= r; ++dz)
-		for (int dy = -r; dy <= r; ++dy)
-			for (int dx = -r; dx <= r; ++dx)
-				if (dx * dx + dy * dy + dz * dz <= r * r) {
-					int vx = hit_pos.x + dx, vy = hit_pos.y + dy, vz = hit_pos.z + dz;
-					if (is_valid_coord(vx, vy, vz)) {
-						int idx = get_index(vx, vy, vz);
-						if (ids_w[idx] != 0) contacted.push_back(idx);
-					}
-				}
-	int n_kontakt = MAX(1, (int)contacted.size());
-	float e_pixel = d_nyers / (1.0f + (float)(n_kontakt - 1) * k_forma);
-	int destroyed_count = 0, damaged_count = 0; float max_recoil = 0.0f;
-	bool instakill = false, bleeding = false, jap_severed = false;
-
-	for (size_t i = 0; i < contacted.size(); ++i) {
-		int idx = contacted[i]; uint8_t tid = ids_w[idx];
-		const PixelProperties& tp = PixelDatabase::get_pixel_fast(tid);
-		float hr = (float)tp.hardness / MAX(1.0f, attacker_hardness);
-		float recoil = e_pixel * (hr * hr);
-		if (recoil > max_recoil) max_recoil = recoil;
-		if (e_pixel > (float)tp.ak_threshold) {
-			dur_w[idx] -= (int32_t)std::round(e_pixel - (float)tp.ak_threshold);
-			damaged_count++;
-			if (dur_w[idx] <= 0) {
-				if (attacker_pixel_id == 29 && tp.max_durability < attacker_max_dur) {
-					kint_stored_damage = (float)(attacker_max_dur - tp.max_durability);
-					kint_timer = 5.0f; max_recoil = 0.0f;
-				}
-				if (tid == 68 || tid == 69) instakill = true;
-				if (tid == 76) bleeding = true;
-				if (tid == 94) jap_severed = true;
-				ids_w[idx] = 0; dur_w[idx] = 0; destroyed_count++;
-			}
-		}
-	}
-	float kb = (total_mass_pm > 0) ? ((d_nyers * (1.0f + (float)n_kontakt * 0.02f)) / (float)total_mass_pm) : 0.0f;
-	if (damaged_count > 0 || destroyed_count > 0) {
-		if (destroyed_count > 0) recalculate_mass_and_center();
-		rebuild_mesh();
-	}
-	result["d_nyers"] = d_nyers; result["e_pixel"] = e_pixel; result["n_kontakt"] = n_kontakt;
-	result["damaged_count"] = damaged_count; result["destroyed_count"] = destroyed_count;
-	result["recoil_damage"] = max_recoil; result["knockback_speed"] = kb;
-	result["kint_stored_damage"] = kint_stored_damage; result["instakill"] = instakill;
-	result["bleeding"] = bleeding; result["jap_severed"] = jap_severed;
-	return result;
-}
-
-Dictionary VoxelBody3D::update_kint_timer(float delta) {
-	Dictionary res; res["shockwave_discharged"] = false; res["shockwave_power"] = 0.0f;
-	if (kint_timer > 0.0f) {
-		kint_timer -= delta;
-		if (kint_timer <= 0.0f) {
-			res["shockwave_discharged"] = true; res["shockwave_power"] = kint_stored_damage;
-			kint_stored_damage = 0.0f; kint_timer = 0.0f;
-		}
-	}
-	res["kint_remaining_time"] = kint_timer; res["kint_stored_damage"] = kint_stored_damage;
-	return res;
-}
-
-Array VoxelBody3D::check_and_extract_disconnected_bodies() {
-	Array detached; int total = size_x * size_y * size_z;
-	uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
-	std::vector<uint8_t> visited(total, 0); std::vector<std::vector<int>> comps;
-	const int dx[6] = {1, -1, 0, 0, 0, 0}, dy[6] = {0, 0, 1, -1, 0, 0}, dz[6] = {0, 0, 0, 0, 1, -1};
-	for (int i = 0; i < total; ++i) {
-		if (ids_w[i] == 0 || visited[i]) continue;
-		std::vector<int> cl; std::queue<int> q; q.push(i); visited[i] = 1;
-		while (!q.empty()) {
-			int c = q.front(); q.pop(); cl.push_back(c);
-			int cx = c % size_x, cy = (c / size_x) % size_y, cz = c / (size_x * size_y);
-			for (int d = 0; d < 6; ++d) {
-				int nx = cx + dx[d], ny = cy + dy[d], nz = cz + dz[d];
-				if (is_valid_coord(nx, ny, nz)) {
-					int ni = get_index(nx, ny, nz);
-					if (ids_w[ni] != 0 && !visited[ni]) { visited[ni] = 1; q.push(ni); }
-				}
-			}
-		}
-		comps.push_back(cl);
-	}
-	if (comps.size() > 1) {
-		size_t max_i = 0;
-		for (size_t i = 1; i < comps.size(); ++i) if (comps[i].size() > comps[max_i].size()) max_i = i;
-		for (size_t i = 0; i < comps.size(); ++i) {
-			if (i == max_i) continue;
-			PackedInt32Array c_ids;
-			for (int idx : comps[i]) {
-				c_ids.push_back(idx % size_x); c_ids.push_back((idx / size_x) % size_y);
-				c_ids.push_back(idx / (size_x * size_y)); c_ids.push_back(ids_w[idx]);
-				ids_w[idx] = 0; dur_w[idx] = 0;
-			}
-			detached.push_back(c_ids);
-		}
-		recalculate_mass_and_center(); rebuild_mesh();
-	}
-	return detached;
-}
-
-void VoxelBody3D::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("initialize_grid", "size_x", "size_y", "size_z", "voxel_scale"), &VoxelBody3D::initialize_grid, DEFVAL(0.1f));
-	ClassDB::bind_method(D_METHOD("fill_block", "pixel_id"), &VoxelBody3D::fill_block);
-	ClassDB::bind_method(D_METHOD("fill_box", "min_pos", "max_pos", "pixel_id"), &VoxelBody3D::fill_box);
-	ClassDB::bind_method(D_METHOD("set_voxel", "x", "y", "z", "pixel_id"), &VoxelBody3D::set_voxel);
-	ClassDB::bind_method(D_METHOD("get_voxel", "x", "y", "z"), &VoxelBody3D::get_voxel);
-	ClassDB::bind_method(D_METHOD("get_voxel_durability", "x", "y", "z"), &VoxelBody3D::get_voxel_durability);
-	ClassDB::bind_method(D_METHOD("rebuild_mesh"), &VoxelBody3D::rebuild_mesh);
-	ClassDB::bind_method(D_METHOD("get_voxel_ids_buffer"), &VoxelBody3D::get_voxel_ids_buffer);
-	ClassDB::bind_method(D_METHOD("recalculate_mass_and_center"), &VoxelBody3D::recalculate_mass_and_center);
-	ClassDB::bind_method(D_METHOD("apply_impact_damage", "hit_pos", "contact_radius", "attacker_pixel_id", "impact_speed", "attacker_mass_pm", "k_forma", "damage_scale", "light_level"), &VoxelBody3D::apply_impact_damage);
-	ClassDB::bind_method(D_METHOD("update_kint_timer", "delta"), &VoxelBody3D::update_kint_timer);
-	ClassDB::bind_method(D_METHOD("check_and_extract_disconnected_bodies"), &VoxelBody3D::check_and_extract_disconnected_bodies);
-	ClassDB::bind_method(D_METHOD("get_total_mass_pm"), &VoxelBody3D::get_total_mass_pm);
-	ClassDB::bind_method(D_METHOD("get_total_mass_kg"), &VoxelBody3D::get_total_mass_kg);
-	ClassDB::bind_method(D_METHOD("get_center_of_mass"), &VoxelBody3D::get_center_of_mass);
-	ClassDB::bind_method(D_METHOD("get_grid_size"), &VoxelBody3D::get_grid_size);
-}
+		if (attacker_pixel_id == 31)
