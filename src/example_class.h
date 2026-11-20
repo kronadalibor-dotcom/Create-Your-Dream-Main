@@ -13,34 +13,28 @@
 
 namespace godot {
 
-// ============================================================================
-// 1. A 130 SZILÁRD PIXEL 15+2 TULAJDONSÁGÁNAK C++ STRUKTÚRÁJA (6. és 26. Fejezet)
-// ============================================================================
 struct PixelProperties {
-	uint8_t id;                  // 0 = Levegő, 1..130 = Szilárd pixelek
-	const char* name;            // Pixel neve (pl. "Kint-pixel", "Szív-pixel")
-	uint8_t tier;                // Tier 0 - Tier 10
-	int32_t ak_threshold;        // Áttörési küszöb (HP / ÁK) - 0..10000
-	int32_t max_durability;      // Durability / pixel - 0..10000
-	int32_t hardness;            // Keménység (Alapsebzés és Newton III.) - 0..10000
-	int32_t elasticity;          // Rugalmasság
-	int32_t bounciness;          // Pattogósság (Gubbancskő = 300)
-	int32_t mass_pm;             // Tömeg (Pixelmass: 1 Pm = 0.5 kg)
-	int32_t gap_resistance;      // GAP-ellenállás (Beomlás ellen)
-	int32_t ap_max;              // AP_max (Kihajlási védelem 1 pixeles oszlopok ellen)
-	int32_t thermal_cond;        // Hővezetés
-	int32_t ignition_point;      // Gyulladáspont (°C, -1 ha nem éghető)
-	int32_t melting_point;       // Olvadáspont (°C, -9999 ha nem olvad)
-	int32_t boiling_point;       // Forráspont (°C, -9999 ha nem forr)
-	int32_t acoustic_vib;        // Akusztikai rezgés (0 = Némafa, 45 = Száraz Avar)
-	int32_t electric_cond;       // Elektromos vezetés
-	int32_t slipperiness;        // Csúszósság (0 = Gekkótalp, 98 = Jéghártya)
-	float r, g, b;               // Alapszín (Vertex Color a 60 FPS rendereléshez)
+	uint8_t id;
+	const char* name;
+	uint8_t tier;
+	int32_t ak_threshold;
+	int32_t max_durability;
+	int32_t hardness;
+	int32_t elasticity;
+	int32_t bounciness;
+	int32_t mass_pm;
+	int32_t gap_resistance;
+	int32_t ap_max;
+	int32_t thermal_cond;
+	int32_t ignition_point;
+	int32_t melting_point;
+	int32_t boiling_point;
+	int32_t acoustic_vib;
+	int32_t electric_cond;
+	int32_t slipperiness;
+	float r, g, b;
 };
 
-// ============================================================================
-// 2. PIXEL DATABASE (C++ Singleton Osztály a 130 Pixelhez és GPU Bufferhez)
-// ============================================================================
 class PixelDatabase : public Object {
 	GDCLASS(PixelDatabase, Object)
 
@@ -58,7 +52,6 @@ public:
 	static void init_database();
 	static const PixelProperties& get_pixel_fast(uint8_t p_id);
 
-	// GDScriptből és Compute Shaderből is hívható lekérdezők:
 	Dictionary get_pixel_info(int p_id) const;
 	int get_pixel_ak(int p_id) const;
 	int get_pixel_durability(int p_id) const;
@@ -66,37 +59,29 @@ public:
 	int get_pixel_mass_pm(int p_id) const;
 	int get_pixel_slipperiness(int p_id) const;
 	Color get_pixel_color(int p_id) const;
-
-	// A Compute Shader (voxel_compute.glsl) számára GPU StorageBuffer előállítása:
 	PackedByteArray get_gpu_material_buffer() const;
 };
 
-// ============================================================================
-// 3. VOXEL BODY 3D (100%-ban Törhető, 50x50x50 Pixeles 3D Test és Fizikai Motor)
-// ============================================================================
 class VoxelBody3D : public MeshInstance3D {
 	GDCLASS(VoxelBody3D, MeshInstance3D)
 
 private:
-	// Méretek (Alapértelmezett: 1 Blokk = 50x50x50 pixel = 125 000 voxel)
 	int size_x;
 	int size_y;
 	int size_z;
-	float voxel_scale; // 1 pixel mérete a 3D térben (alapból 0.1 egység)
+	int max_filled_y;
+	float voxel_scale;
 
-	// Szupergyors, folytonos memóriatömbök a 60+ FPS-hez és a Compute Shaderhez:
-	PackedByteArray voxel_ids;         // 0 = Levegő, 1..130 = Pixel ID
-	PackedInt32Array voxel_durability; // Minden egyes pixel aktuális egyéni Durability-je
-	PackedInt32Array voxel_heat;       // Minden egyes pixel aktuális hőmérséklete (°C)
+	PackedByteArray voxel_ids;
+	PackedInt32Array voxel_durability;
+	PackedInt32Array voxel_heat;
 
-	// Test Fizikai Tulajdonságok (4. Fejezet - Tömeg és 3D Súlypont)
 	bool is_static_body;
-	int64_t total_mass_pm;             // Össztömeg Pixelmassban (1 Pm = 0.5 kg)
-	Vector3 center_of_mass;            // 3D-s tömegközéppont (a fák dőléséhez és forgáshoz)
+	int64_t total_mass_pm;
+	Vector3 center_of_mass;
 
-	// Kint Érc (29-es pixel) Kinetikus Töltés Rendszere (24.2.1. Fejezet)
-	float kint_stored_damage;          // Eltárolt (Dur_Kint - Dur_cél) bónusz sebzés
-	float kint_timer;                  // 5.0 másodperces visszaszámláló
+	float kint_stored_damage;
+	float kint_timer;
 
 	Ref<ArrayMesh> voxel_mesh;
 	Ref<StandardMaterial3D> voxel_material;
@@ -109,6 +94,9 @@ private:
 		return (x >= 0 && x < size_x && y >= 0 && y < size_y && z >= 0 && z < size_z);
 	}
 
+	void ensure_render_resources();
+	void place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx, int tree_gz, int tree_base_y, int seed);
+
 protected:
 	static void _bind_methods();
 
@@ -116,22 +104,26 @@ public:
 	VoxelBody3D();
 	~VoxelBody3D();
 
-	// 1. Inicializálás és Blokk-kitöltés:
 	void initialize_grid(int p_x, int p_y, int p_z, float p_voxel_scale = 0.1f);
 	void fill_block(int p_pixel_id);
 	void fill_box(Vector3i p_min, Vector3i p_max, int p_pixel_id);
 
-	// 2. Pixel-pontos Építés (Build) és Lekérdezés:
 	void set_voxel(int x, int y, int z, int p_pixel_id);
 	int get_voxel(int x, int y, int z) const;
 	int get_voxel_durability(int x, int y, int z) const;
+	int get_surface_y(int x, int z) const;
 
-	// 3. 60 FPS Mesh Generálás és GPU Buffer:
+	// C++ Natív, Életnagyságú 1. Biom Szektor + Óriás Tölgyfa Generátor:
+	void generate_biome1_sector(int chunk_x, int chunk_z, int world_seed);
+
+	// C++ 3D DDA Voxel Sugárkövetés (0.001 ms-os találat):
+	Dictionary raycast_voxel(Vector3 world_origin, Vector3 world_dir, float max_dist) const;
+
+	// 60+ FPS C++ 2D Greedy Mesher:
 	void rebuild_mesh();
 	PackedByteArray get_voxel_ids_buffer() const;
 	void recalculate_mass_and_center();
 
-	// 4. Harci és Becsapódási Fizika (15. Fejezet: D_nyers, N_kontakt, K_forma, Newton III.):
 	Dictionary apply_impact_damage(
 		Vector3i hit_pos,
 		int contact_radius,
@@ -143,13 +135,9 @@ public:
 		int light_level
 	);
 
-	// 5. Kint Érc 5 mp-es Időzítő és Shockwave Kisülés:
 	Dictionary update_kint_timer(float delta);
-
-	// 6. GAP / JAP Statika és 3D Flood-Fill Kettészakadás / Csonkolás (5.2. és 16. Fejezet):
 	Array check_and_extract_disconnected_bodies();
 
-	// Getterek a GDScript vezérlőknek:
 	int64_t get_total_mass_pm() const { return total_mass_pm; }
 	float get_total_mass_kg() const { return (float)total_mass_pm * 0.5f; }
 	Vector3 get_center_of_mass() const { return center_of_mass; }
