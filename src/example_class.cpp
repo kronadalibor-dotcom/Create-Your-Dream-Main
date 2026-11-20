@@ -48,8 +48,8 @@ void PixelDatabase::init_database() {
 	pixels[31]={31,"Loncore-pixel (Feny-Erc)",4,250,650,100,20,14,45,480,360,60,-1,2400,3800,75,75,35,0.98f,0.88f,0.32f};
 	pixels[32]={32,"Gyemant-pixel",5,450,1200,400,5,18,40,850,680,100,4000,3550,4800,98,0,75,0.55f,0.95f,1.00f};
 	pixels[33]={33,"Tolgy-kemenyfa",1,32,85,30,16,8,22,75,55,11,280,-9999,-9999,34,0,20,0.55f,0.40f,0.24f};
-	pixels[34]={34,"Tolgyfakereg",0,12,25,11,10,3,12,20,14,8,240,-9999,-9999,16,0,18,0.35f,0.25f,0.15f};
-	pixels[35]={35,"Tolgyfalevel",0,2,6,2,20,8,4,5,3,5,160,-9999,-9999,4,0,30,0.20f,0.55f,0.18f};
+	pixels[34]={34,"Tolgyfakereg",0,12,25,11,10,3,12,20,14,8,240,-9999,-9999,16,0,18,0.38f,0.27f,0.16f};
+	pixels[35]={35,"Tolgyfalevel",0,2,6,2,20,8,4,5,3,5,160,-9999,-9999,4,0,30,0.20f,0.52f,0.16f};
 	pixels[36]={36,"Tolgy-gyoker",1,28,75,26,24,8,20,80,60,10,300,-9999,-9999,25,0,18,0.42f,0.30f,0.18f};
 	pixels[37]={37,"Makk-hej",0,14,28,18,5,6,16,15,10,10,220,-9999,-9999,22,0,30,0.48f,0.32f,0.16f};
 	pixels[38]={38,"Makk-belso (Mag)",0,5,10,6,8,4,12,6,4,8,200,-9999,-9999,8,0,25,0.78f,0.68f,0.42f};
@@ -65,11 +65,11 @@ void PixelDatabase::init_database() {
 	pixels[48]={48,"Fenyotoboz",0,8,16,10,8,5,9,8,5,8,170,-9999,-9999,14,0,26,0.40f,0.28f,0.16f};
 	pixels[49]={49,"Fenyogyanta",0,8,18,9,12,3,12,10,6,8,130,80,200,14,0,40,0.92f,0.68f,0.12f};
 	pixels[50]={50,"Korhadtfa es Holtfa",0,9,20,8,6,3,10,14,9,7,180,-9999,-9999,12,0,20,0.32f,0.28f,0.22f};
-	pixels[51]={51,"Zold Fu-pixel",0,2,5,1,25,8,4,4,2,6,160,-9999,-9999,3,2,40,0.28f,0.68f,0.22f};
-	pixels[52]={52,"Magas Fu-pixel",0,3,8,2,28,8,5,5,3,6,150,-9999,-9999,4,2,38,0.24f,0.62f,0.20f};
+	pixels[51]={51,"Zold Fu-pixel",0,2,5,1,25,8,4,4,2,6,160,-9999,-9999,3,2,40,0.28f,0.62f,0.20f};
+	pixels[52]={52,"Magas Fu-pixel",0,3,8,2,28,8,5,5,3,6,150,-9999,-9999,4,2,38,0.24f,0.56f,0.18f};
 	pixels[53]={53,"Szaraz Fu-pixel",0,2,4,1,20,6,3,3,2,5,90,-9999,-9999,6,0,42,0.72f,0.64f,0.28f};
 	pixels[54]={54,"Viragszirom",0,1,3,1,22,6,2,2,1,4,140,-9999,-9999,2,0,35,0.95f,0.35f,0.55f};
-	pixels[55]={55,"Viragszar",0,4,9,3,30,8,4,6,4,5,160,-9999,-9999,4,2,30,0.30f,0.65f,0.25f};
+	pixels[55]={55,"Viragszar",0,4,9,3,30,8,4,6,4,5,160,-9999,-9999,4,2,30,0.30f,0.60f,0.22f};
 	pixels[56]={56,"Moha-pixel",0,3,10,2,35,12,14,8,5,10,220,-9999,-9999,3,6,45,0.22f,0.52f,0.18f};
 	pixels[57]={57,"Logo Inda-rost",1,16,45,8,50,12,9,35,25,5,190,-9999,-9999,5,2,20,0.26f,0.48f,0.20f};
 	pixels[58]={58,"Tuskes Inda-tovis",1,22,50,28,10,5,14,28,20,8,200,-9999,-9999,18,0,15,0.35f,0.22f,0.16f};
@@ -215,9 +215,9 @@ static float smooth_noise3(float x, float y, float z, int seed) {
 }
 
 static int get_global_terrain_y(int gx, int gz, int seed) {
-	float n1 = smooth_noise3(gx * 0.008f, 0.0f, gz * 0.008f, seed) * 18.0f;
-	float n2 = smooth_noise3(gx * 0.025f, 0.0f, gz * 0.025f, seed + 101) * 5.0f;
-	return CLAMP((int)(14.0f + n1 + n2), 6, 42);
+	float n1 = smooth_noise3(gx * 0.006f, 0.0f, gz * 0.006f, seed) * 10.0f;
+	float n2 = smooth_noise3(gx * 0.02f, 0.0f, gz * 0.02f, seed + 101) * 2.5f;
+	return CLAMP((int)(14.0f + n1 + n2), 8, 30);
 }
 
 VoxelBody3D::VoxelBody3D() {
@@ -234,7 +234,7 @@ void VoxelBody3D::ensure_render_resources() {
 	if (voxel_material.is_null()) {
 		voxel_material.instantiate();
 		voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-		voxel_material->set_roughness(0.85f);
+		voxel_material->set_roughness(0.88f);
 		set_material_override(voxel_material);
 	}
 }
@@ -282,80 +282,109 @@ int VoxelBody3D::get_voxel(int x, int y, int z) const { return is_valid_coord(x,
 int VoxelBody3D::get_voxel_durability(int x, int y, int z) const { return is_valid_coord(x, y, z) ? voxel_durability.ptr()[get_index(x, y, z)] : 0; }
 PackedByteArray VoxelBody3D::get_voxel_ids_buffer() const { return voxel_ids; }
 
+// Csak a szilárd talajt nézi (a fűszálakon 52 és virágokon 54, 55 NEM lehet járni!)
 int VoxelBody3D::get_surface_y(int x, int z) const {
-	if (x < 0 || x >= size_x || z < 0 || z >= size_z) return 16;
+	if (x < 0 || x >= size_x || z < 0 || z >= size_z) return 14;
 	const uint8_t* ids_r = voxel_ids.ptr();
 	for (int y = MIN(size_y - 1, max_filled_y); y >= 0; --y) {
 		uint8_t id = ids_r[get_index(x, y, z)];
-		if (id == 51 || id == 1 || id == 17 || id == 56 || id == 36) return y;
+		if (id == 51 || id == 1 || id == 7 || id == 8 || id == 17 || id == 56 || id == 36) return y;
 	}
-	return 16;
+	return 14;
 }
 
+// Részletes, faágas, szellős lombkoronájú, egyenes Tölgyfa (nem érnek össze!):
 void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx, int tree_gz, int tree_base_y, int seed) {
-	if (tree_gx + 65 < gx_min || tree_gx - 65 >= gx_min + size_x || tree_gz + 65 < gz_min || tree_gz - 65 >= gz_min + size_z) return;
-	for (int r = 0; r < 6; ++r) {
-		float ang = r * 1.0472f + fast_hash(r, tree_gx, tree_gz, seed) * 0.4f;
-		float dx = std::cos(ang), dz = std::sin(ang);
-		for (int step = 4; step < 30; ++step) {
-			float rx = tree_gx + dx * step + std::sin(step * 0.3f) * 1.5f;
-			float rz = tree_gz + dz * step + std::cos(step * 0.3f) * 1.5f;
-			float ry = tree_base_y + 4.0f - step * 0.32f;
-			int rad = MAX(1, 4 - step / 8);
-			for (int oz = -rad; oz <= rad; ++oz)
-				for (int oy = -rad; oy <= rad; ++oy)
-					for (int ox = -rad; ox <= rad; ++ox)
-						if (ox*ox + oy*oy + oz*oz <= rad*rad)
-							set_voxel((int)rx + ox - gx_min, (int)ry + oy, (int)rz + oz - gz_min, 36);
-		}
-	}
-	int trunk_h = 115;
-	float lean_x = (fast_hash(tree_gx, 1, tree_gz, seed) - 0.5f) * 0.14f;
-	float lean_z = (fast_hash(tree_gx, 2, tree_gz, seed) - 0.5f) * 0.14f;
-	for (int h = 0; h < trunk_h; ++h) {
-		float cx = tree_gx + lean_x * h + std::sin(h * 0.06f) * 1.8f;
-		float cz = tree_gz + lean_z * h + std::cos(h * 0.06f) * 1.8f;
-		int cy = tree_base_y + h;
-		float rad = 12.0f - (float)h / trunk_h * 4.8f + (h < 10 ? (10 - h) * 0.35f : 0.0f);
+	if (tree_gx + 55 < gx_min || tree_gx - 55 >= gx_min + size_x || tree_gz + 55 < gz_min || tree_gz - 55 >= gz_min + size_z) return;
+
+	auto draw_leaf_cluster = [&](float cx, float cy, float cz, float rad) {
 		int ir = (int)std::ceil(rad);
-		for (int dz = -ir; dz <= ir; ++dz)
-			for (int dx = -ir; dx <= ir; ++dx) {
-				float d = std::sqrt((float)(dx*dx + dz*dz));
-				if (d <= rad - 2.0f) set_voxel((int)cx + dx - gx_min, cy, (int)cz + dz - gz_min, 33);
-				else if (d <= rad) set_voxel((int)cx + dx - gx_min, cy, (int)cz + dz - gz_min, 34);
-			}
-	}
-	float top_x = tree_gx + lean_x * trunk_h, top_y = (float)(tree_base_y + trunk_h), top_z = tree_gz + lean_z * trunk_h;
-	for (int b = 0; b < 5; ++b) {
-		float ang = b * 1.2566f + 0.3f, bx_dir = std::cos(ang), bz_dir = std::sin(ang);
-		for (int step = 0; step < 36; ++step) {
-			int bx = (int)(top_x + bx_dir * step), by = (int)(top_y - 12 + step * 0.45f), bz = (int)(top_z + bz_dir * step);
-			int brad = MAX(2, 5 - step / 9);
-			for (int oz = -brad; oz <= brad; ++oz)
-				for (int oy = -brad; oy <= brad; ++oy)
-					for (int ox = -brad; ox <= brad; ++ox)
-						if (ox*ox + oy*oy + oz*oz <= brad*brad)
-							set_voxel(bx + ox - gx_min, by + oy, bz + oz - gz_min, (ox*ox+oy*oy+oz*oz < (brad-1)*(brad-1)) ? 33 : 34);
-		}
-	}
-	const float blobs[6][4] = {{0,12,0,38.0f},{22,4,15,28.0f},{-22,6,-14,28.0f},{16,5,-22,26.0f},{-18,4,20,26.0f},{0,28,0,26.0f}};
-	for (int c = 0; c < 6; ++c) {
-		float bcx = top_x + blobs[c][0], bcy = top_y + blobs[c][1], bcz = top_z + blobs[c][2], R = blobs[c][3];
-		int iR = (int)R;
-		for (int dz = -iR; dz <= iR; ++dz) {
-			int gz = (int)bcz + dz; if (gz < gz_min || gz >= gz_min + size_z) continue;
-			for (int dy = -iR; dy <= iR; ++dy) {
-				int gy = (int)bcy + dy; if (gy < 0 || gy >= size_y) continue;
-				for (int dx = -iR; dx <= iR; ++dx) {
-					int gx = (int)bcx + dx; if (gx < gx_min || gx >= gx_min + size_x) continue;
-					if ((dx*dx + dy*dy*1.35f + dz*dz)/(R*R) <= 1.0f && fast_hash(gx, gy, gz, seed + 77) > 0.12f) {
+		for (int dz = -ir; dz <= ir; ++dz) {
+			int gz = (int)cz + dz; if (gz < gz_min || gz >= gz_min + size_z) continue;
+			for (int dy = -ir; dy <= ir; ++dy) {
+				int gy = (int)cy + dy; if (gy < 0 || gy >= size_y) continue;
+				for (int dx = -ir; dx <= ir; ++dx) {
+					int gx = (int)cx + dx; if (gx < gx_min || gx >= gx_min + size_x) continue;
+					float d2 = (dx*dx + dy*dy*1.4f + dz*dz) / (rad*rad);
+					if (d2 <= 1.0f && fast_hash(gx, gy, gz, seed + 77) > (d2 * 0.45f)) {
 						int lx = gx - gx_min, lz = gz - gz_min;
 						if (get_voxel(lx, gy, lz) == 0) set_voxel(lx, gy, lz, 35);
 					}
 				}
 			}
 		}
+	};
+
+	// 1. Földbe kapaszkodó Tölgy-gyökerek (36)
+	for (int r = 0; r < 5; ++r) {
+		float ang = r * 1.2566f + fast_hash(r, tree_gx, tree_gz, seed) * 0.3f;
+		float dx = std::cos(ang), dz = std::sin(ang);
+		for (int step = 3; step < 16; ++step) {
+			int rx = (int)(tree_gx + dx * step), rz = (int)(tree_gz + dz * step), ry = (int)(tree_base_y + 2.5f - step * 0.25f);
+			int rad = (step < 8) ? 2 : 1;
+			for (int oz = -rad; oz <= rad; ++oz)
+				for (int oy = -rad; oy <= rad; ++oy)
+					for (int ox = -rad; ox <= rad; ++ox)
+						if (ox*ox + oy*oy + oz*oz <= rad*rad)
+							set_voxel(rx + ox - gx_min, ry + oy, rz + oz - gz_min, 36);
+		}
 	}
+
+	// 2. Egyenes, felfelé keskenyedő fatörzs: belül Keményfa (33), kívül Kéreg (34)
+	int trunk_h = 68;
+	for (int h = 0; h < trunk_h; ++h) {
+		float cx = tree_gx + std::sin(h * 0.05f) * 1.2f;
+		float cz = tree_gz + std::cos(h * 0.05f) * 1.2f;
+		int cy = tree_base_y + h;
+		float rad = 6.2f - (float)h / trunk_h * 2.5f + (h < 6 ? (6 - h) * 0.3f : 0.0f);
+		int ir = (int)std::ceil(rad);
+		for (int dz = -ir; dz <= ir; ++dz)
+			for (int dx = -ir; dx <= ir; ++dx) {
+				float d = std::sqrt((float)(dx*dx + dz*dz));
+				if (d <= rad - 1.3f) set_voxel((int)cx + dx - gx_min, cy, (int)cz + dz - gz_min, 33);
+				else if (d <= rad) set_voxel((int)cx + dx - gx_min, cy, (int)cz + dz - gz_min, 34);
+			}
+	}
+
+	// 3. Részletes, 3 szintű faág-rendszer (Főágak -> Mellékágak -> Gallyak) + szellős levélcsomók az ágak végén:
+	for (int b = 0; b < 9; ++b) {
+		int start_h = 40 + (b * 3);
+		float ang = b * 2.39996f; // Aranymetszés szög, hogy minden irányba természetesen ágazzon
+		float dir_x = std::cos(ang), dir_z = std::sin(ang);
+		float pitch = 0.32f + (b % 3) * 0.12f;
+		int b_len = 22 + (b % 3) * 4;
+		float bx = (float)tree_gx, by = (float)(tree_base_y + start_h), bz = (float)tree_gz;
+
+		for (int step = 1; step <= b_len; ++step) {
+			bx += dir_x; bz += dir_z; by += pitch;
+			int brad = (step < 8) ? 2 : 1;
+			for (int oz = -brad; oz <= brad; ++oz)
+				for (int oy = -brad; oy <= brad; ++oy)
+					for (int ox = -brad; ox <= brad; ++ox)
+						if (ox*ox + oy*oy + oz*oz <= brad*brad)
+							set_voxel((int)bx + ox - gx_min, (int)by + oy, (int)bz + oz - gz_min, (brad == 2 && ox==0 && oy==0 && oz==0) ? 33 : 34);
+
+			// Mellékágak (Sub-branches) kiágazása a főág közepén és végén:
+			if (step == 12 || step == b_len - 4) {
+				for (int side = -1; side <= 1; side += 2) {
+					float sang = ang + side * 0.75f;
+					float sx = bx, sy = by, sz = bz;
+					for (int ss = 1; ss <= 10; ++ss) {
+						sx += std::cos(sang); sz += std::sin(sang); sy += 0.25f;
+						set_voxel((int)sx - gx_min, (int)sy, (int)sz - gz_min, 33);
+						set_voxel((int)sx - gx_min, (int)sy + 1, (int)sz - gz_min, 34);
+					}
+					draw_leaf_cluster(sx, sy + 2.0f, sz, 6.5f);
+				}
+			}
+		}
+		// Főág végén lévő levélfürt + lelógó Makk (37, 38):
+		draw_leaf_cluster(bx, by + 2.5f, bz, 8.0f);
+		set_voxel((int)bx - gx_min, (int)by - 2, (int)bz - gz_min, 37);
+		set_voxel((int)bx - gx_min, (int)by - 3, (int)bz - gz_min, 38);
+	}
+	// Felső korona-csúcs levélcsomói:
+	draw_leaf_cluster((float)tree_gx, (float)(tree_base_y + trunk_h + 6), (float)tree_gz, 10.5f);
 }
 
 void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_seed) {
@@ -377,29 +406,29 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 				}
 				set_voxel(x, y, z, pid);
 			}
+			// NAGYON RÖVID (1-2 pixeles) ritkás fűszálak (52) és apró 2 pixeles virágok (55+54):
 			float fl = fast_hash(gx, surf_y, gz, world_seed + 99);
-			if (fl < 0.045f) {
-				int gh = 7 + (int)(fast_hash(gx, 1, gz, world_seed) * 8.0f);
+			if (fl < 0.018f) {
+				int gh = 1 + (int)(fast_hash(gx, 1, gz, world_seed) * 2.0f);
 				for (int h = 1; h <= gh; ++h) set_voxel(x, surf_y + h, z, 52);
-			} else if (fl > 0.992f) {
-				int fh = 5 + (int)(fast_hash(gx, 2, gz, world_seed) * 4.0f);
-				for (int h = 1; h < fh; ++h) set_voxel(x, surf_y + h, z, 55);
-				set_voxel(x, surf_y + fh, z, 54);
-				set_voxel(x+1, surf_y+fh, z, 54); set_voxel(x-1, surf_y+fh, z, 54);
-				set_voxel(x, surf_y+fh, z+1, 54); set_voxel(x, surf_y+fh, z-1, 54);
+			} else if (fl > 0.996f) {
+				set_voxel(x, surf_y + 1, z, 55);
+				set_voxel(x, surf_y + 2, z, 54);
 			}
 		}
 	}
-	if (((chunk_x + chunk_z) & 1) == 0) {
-		int ry_base = get_global_terrain_y(chunk_x * size_x + 18, chunk_z * size_z + 20, world_seed);
-		for (int dz = -14; dz <= 14; ++dz)
-			for (int dy = -6; dy <= 16; ++dy)
-				for (int dx = -14; dx <= 14; ++dx)
-					if ((dx*dx)/160.0f + (dy*dy)/100.0f + (dz*dz)/140.0f <= 1.0f)
-						set_voxel(18 + dx, ry_base + dy, 20 + dz, (dy > 9) ? 56 : 17);
+	// Természetes Mohás Szikla (csak 1 helyen, távol a fától):
+	if (chunk_x == 0 && chunk_z == 0) {
+		int ry_base = get_global_terrain_y(16, 42, world_seed);
+		for (int dz = -7; dz <= 7; ++dz)
+			for (int dy = -3; dy <= 8; ++dy)
+				for (int dx = -8; dx <= 8; ++dx)
+					if ((dx*dx)/55.0f + (dy*dy)/32.0f + (dz*dz)/48.0f <= 1.0f)
+						set_voxel(16 + dx, ry_base + dy, 42 + dz, (dy > 4) ? 56 : 17);
 	}
-	const int trees[3][2] = {{42, 42}, {-38, 50}, {52, -35}};
-	for (int t = 0; t < 3; ++t) {
+	// Két különálló, egymástól 135 pixelre lévő Tölgyfa (soha nem érnek össze!):
+	const int trees[2][2] = {{42, 42}, {-45, -40}};
+	for (int t = 0; t < 2; ++t) {
 		int tgx = trees[t][0], tgz = trees[t][1];
 		place_giant_oak_in_sector(gx_min, gz_min, tgx, tgz, get_global_terrain_y(tgx, tgz, world_seed), world_seed + t * 53);
 	}
@@ -411,8 +440,8 @@ Dictionary VoxelBody3D::raycast_voxel(Vector3 world_origin, Vector3 world_dir, f
 	Vector3 dir = world_dir.normalized();
 	if (dir.length_squared() < 0.0001f) return res;
 	Vector3 local_start = (world_origin - get_global_position()) / voxel_scale;
-	int max_steps = (int)((max_dist / voxel_scale) * 2.0f);
-	Vector3 pos = local_start, step = dir * 0.45f;
+	int max_steps = (int)((max_dist / voxel_scale) * 2.2f);
+	Vector3 pos = local_start, step = dir * 0.42f;
 	Vector3i prev_voxel((int)std::floor(pos.x), (int)std::floor(pos.y), (int)std::floor(pos.z));
 	const uint8_t* ids_r = voxel_ids.ptr();
 	for (int i = 0; i < max_steps; ++i) {
@@ -448,21 +477,28 @@ void VoxelBody3D::recalculate_mass_and_center() {
 	center_of_mass = (total_mass_pm > 0) ? Vector3((float)(sx/total_mass_pm)*voxel_scale, (float)(sy/total_mass_pm)*voxel_scale, (float)(sz/total_mass_pm)*voxel_scale) : Vector3(0,0,0);
 }
 
+// 60 FPS GREEDY MESHER + FAKÉREG-EREZET + AMBIENT OCCLUSION (AO) GRAFKA:
 void VoxelBody3D::rebuild_mesh() {
 	ensure_render_resources(); voxel_mesh->clear_surfaces();
 	PackedVector3Array vertices, normals; PackedColorArray colors;
 	const uint8_t* ids_r = voxel_ids.ptr(); const int32_t* dur_r = voxel_durability.ptr();
 	const float s = voxel_scale; int y_lim = MIN(size_y - 1, max_filled_y);
 
-	auto get_key = [&](int idx) -> uint16_t {
+	auto get_key = [&](int x, int y, int z, int idx) -> uint16_t {
 		uint8_t id = ids_r[idx]; if (id == 0) return 0;
 		int32_t md = PixelDatabase::get_pixel_fast(id).max_durability;
-		uint16_t b = (md > 0) ? (uint16_t)CLAMP((dur_r[idx] * 7) / md, 1, 7) : 7;
-		return ((uint16_t)id << 3) | b;
+		int hp_b = (md > 0) ? CLAMP((dur_r[idx] * 4) / md, 1, 4) : 4;
+		// Természetes mikro-erezet (fakéregnél függőleges barázdák, lombnál/fűnél színvariáció) + AO sarok-árnyék:
+		int grain = (id == 34 || id == 33) ? ((int)(fast_hash(x, y / 4, z, 11) * 3.0f)) : ((int)(fast_hash(x, y, z, 17) * 3.0f));
+		if (y + 1 < size_y && (ids_r[get_index(MIN(size_x-1,x+1), y+1, z)] != 0 || ids_r[get_index(x, y+1, MIN(size_z-1,z+1))] != 0)) {
+			grain = MAX(0, grain - 1); // Mélyedés-árnyék (Ambient Occlusion)
+		}
+		uint16_t shade = (uint16_t)CLAMP(hp_b * 2 + grain - 2, 1, 7);
+		return ((uint16_t)id << 3) | shade;
 	};
-	auto key_to_color = [&](uint16_t key) -> Color {
+	auto key_to_color = [&](uint16_t key, float dir_light) -> Color {
 		const PixelProperties& p = PixelDatabase::get_pixel_fast((uint8_t)(key >> 3));
-		float r = 0.25f + 0.75f * ((float)(key & 7) / 7.0f);
+		float r = (0.42f + 0.58f * ((float)(key & 7) / 7.0f)) * dir_light;
 		return Color(p.r * r, p.g * r, p.b * r, 1.0f);
 	};
 	auto add_quad = [&](const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, const Vector3& norm, const Color& col) {
@@ -474,12 +510,13 @@ void VoxelBody3D::rebuild_mesh() {
 	std::vector<uint16_t> mask_xz(size_x * size_z);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dy = (dir == 0) ? 1 : -1;
+		float dl = (dir == 0) ? 1.05f : 0.55f;
 		for (int y = 0; y <= y_lim; ++y) {
 			bool any = false;
 			for (int z = 0; z < size_z; ++z)
 				for (int x = 0; x < size_x; ++x) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
-					if (ids_r[idx] != 0 && (y + dy < 0 || y + dy >= size_y || ids_r[get_index(x, y + dy, z)] == 0)) { k = get_key(idx); any = true; }
+					if (ids_r[idx] != 0 && (y + dy < 0 || y + dy >= size_y || ids_r[get_index(x, y + dy, z)] == 0)) { k = get_key(x, y, z, idx); any = true; }
 					mask_xz[x + z * size_x] = k;
 				}
 			if (!any) continue;
@@ -496,7 +533,7 @@ void VoxelBody3D::rebuild_mesh() {
 					}
 					for (int dz = 0; dz < h; ++dz) for (int dx = 0; dx < w; ++dx) mask_xz[(x + dx) + (z + dz) * size_x] = 0;
 					float x0 = x * s, x1 = (x + w) * s, z0 = z * s, z1 = (z + h) * s, yf = (dir == 0 ? (y + 1) : y) * s;
-					Color col = key_to_color(k);
+					Color col = key_to_color(k, dl);
 					if (dir == 0) add_quad(Vector3(x0, yf, z1), Vector3(x0, yf, z0), Vector3(x1, yf, z0), Vector3(x1, yf, z1), Vector3(0, 1, 0), col);
 					else add_quad(Vector3(x0, yf, z0), Vector3(x0, yf, z1), Vector3(x1, yf, z1), Vector3(x1, yf, z0), Vector3(0, -1, 0), col);
 				}
@@ -507,12 +544,13 @@ void VoxelBody3D::rebuild_mesh() {
 	std::vector<uint16_t> mask_xy(size_x * y_count);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dz_s = (dir == 0) ? 1 : -1;
+		float dl = (dir == 0) ? 0.90f : 0.72f;
 		for (int z = 0; z < size_z; ++z) {
 			bool any = false;
 			for (int y = 0; y < y_count; ++y)
 				for (int x = 0; x < size_x; ++x) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
-					if (ids_r[idx] != 0 && (z + dz_s < 0 || z + dz_s >= size_z || ids_r[get_index(x, y, z + dz_s)] == 0)) { k = get_key(idx); any = true; }
+					if (ids_r[idx] != 0 && (z + dz_s < 0 || z + dz_s >= size_z || ids_r[get_index(x, y, z + dz_s)] == 0)) { k = get_key(x, y, z, idx); any = true; }
 					mask_xy[x + y * size_x] = k;
 				}
 			if (!any) continue;
@@ -529,7 +567,7 @@ void VoxelBody3D::rebuild_mesh() {
 					}
 					for (int dy = 0; dy < h; ++dy) for (int dx = 0; dx < w; ++dx) mask_xy[(x + dx) + (y + dy) * size_x] = 0;
 					float x0 = x * s, x1 = (x + w) * s, y0 = y * s, y1 = (y + h) * s, zf = (dir == 0 ? (z + 1) : z) * s;
-					Color col = key_to_color(k);
+					Color col = key_to_color(k, dl);
 					if (dir == 0) add_quad(Vector3(x0, y0, zf), Vector3(x0, y1, zf), Vector3(x1, y1, zf), Vector3(x1, y0, zf), Vector3(0, 0, 1), col);
 					else add_quad(Vector3(x1, y0, zf), Vector3(x1, y1, zf), Vector3(x0, y1, zf), Vector3(x0, y0, zf), Vector3(0, 0, -1), col);
 				}
@@ -539,12 +577,13 @@ void VoxelBody3D::rebuild_mesh() {
 	std::vector<uint16_t> mask_zy(size_z * y_count);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dx_s = (dir == 0) ? 1 : -1;
+		float dl = (dir == 0) ? 0.84f : 0.78f;
 		for (int x = 0; x < size_x; ++x) {
 			bool any = false;
 			for (int y = 0; y < y_count; ++y)
 				for (int z = 0; z < size_z; ++z) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
-					if (ids_r[idx] != 0 && (x + dx_s < 0 || x + dx_s >= size_x || ids_r[get_index(x + dx_s, y, z)] == 0)) { k = get_key(idx); any = true; }
+					if (ids_r[idx] != 0 && (x + dx_s < 0 || x + dx_s >= size_x || ids_r[get_index(x + dx_s, y, z)] == 0)) { k = get_key(x, y, z, idx); any = true; }
 					mask_zy[z + y * size_z] = k;
 				}
 			if (!any) continue;
@@ -561,7 +600,7 @@ void VoxelBody3D::rebuild_mesh() {
 					}
 					for (int dy = 0; dy < h; ++dy) for (int dz = 0; dz < w; ++dz) mask_zy[(z + dz) + (y + dy) * size_z] = 0;
 					float z0 = z * s, z1 = (z + w) * s, y0 = y * s, y1 = (y + h) * s, xf = (dir == 0 ? (x + 1) : x) * s;
-					Color col = key_to_color(k);
+					Color col = key_to_color(k, dl);
 					if (dir == 0) add_quad(Vector3(xf, y0, z1), Vector3(xf, y1, z1), Vector3(xf, y1, z0), Vector3(xf, y0, z0), Vector3(1, 0, 0), col);
 					else add_quad(Vector3(xf, y0, z0), Vector3(xf, y1, z0), Vector3(xf, y1, z1), Vector3(xf, y0, z1), Vector3(-1, 0, 0), col);
 				}
@@ -575,6 +614,7 @@ void VoxelBody3D::rebuild_mesh() {
 	}
 }
 
+// KIZÁRÓLAG A KÜLSŐ (LEVEGŐVEL ÉRINTKEZŐ) FELÜLETI PIXELEKET ÉRHETI TALÁLAT!
 Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius, int attacker_pixel_id, float impact_speed, float attacker_mass_pm, float k_forma, float damage_scale, int light_level) {
 	Dictionary result; uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
 	float attacker_hardness = 10.0f; int32_t attacker_max_dur = 180;
@@ -593,6 +633,15 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 	float d_nyers = (attacker_hardness * m_speed * m_mass * damage_scale) + kint_stored_damage;
 	if (kint_stored_damage > 0.0f) { kint_stored_damage = 0.0f; kint_timer = 0.0f; }
 
+	auto is_exposed_to_air = [&](int x, int y, int z) -> bool {
+		const int dx[6] = {1,-1,0,0,0,0}, dy[6] = {0,0,1,-1,0,0}, dz[6] = {0,0,0,0,1,-1};
+		for (int d = 0; d < 6; ++d) {
+			int nx = x + dx[d], ny = y + dy[d], nz = z + dz[d];
+			if (!is_valid_coord(nx, ny, nz) || ids_w[get_index(nx, ny, nz)] == 0) return true;
+		}
+		return false;
+	};
+
 	std::vector<int> contacted; int r = MAX(0, contact_radius);
 	for (int dz = -r; dz <= r; ++dz)
 		for (int dy = -r; dy <= r; ++dy)
@@ -601,7 +650,8 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 					int vx = hit_pos.x + dx, vy = hit_pos.y + dy, vz = hit_pos.z + dz;
 					if (is_valid_coord(vx, vy, vz)) {
 						int idx = get_index(vx, vy, vz);
-						if (ids_w[idx] != 0) contacted.push_back(idx);
+						// Belső, eltakart pixelt TILOS közvetlenül sebezni! Csak a külső felületet:
+						if (ids_w[idx] != 0 && is_exposed_to_air(vx, vy, vz)) contacted.push_back(idx);
 					}
 				}
 	int n_kontakt = MAX(1, (int)contacted.size());
