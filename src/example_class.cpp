@@ -15,44 +15,44 @@ PixelDatabase::~PixelDatabase() {}
 void PixelDatabase::init_database() {
 	if (initialized) return;
 	pixels[0]={0,"Levego",0,0,0,0,0,0,0,0,0,0,-1,-9999,-9999,0,0,100,0.0f,0.0f,0.0f};
-	pixels[1]={1,"Termekeny Fold (Humusz)",0,5,12,4,5,1,18,10,6,12,250,-9999,-9999,8,5,10,0.36f,0.25f,0.16f};
-	pixels[2]={2,"Magas Humuszu Fold",0,6,15,5,6,1,19,12,8,13,280,-9999,-9999,9,6,14,0.22f,0.16f,0.11f};
-	pixels[3]={3,"Mocsari Fold",0,7,18,6,8,1,22,14,9,16,-1,-9999,-9999,6,10,25,0.20f,0.21f,0.20f};
-	pixels[4]={4,"Vizes Iszap",0,5,16,4,12,2,25,12,7,20,-1,-9999,-9999,4,18,86,0.28f,0.26f,0.22f};
-	pixels[5]={5,"Kiszaradt Iszap",0,9,22,12,3,1,20,18,12,14,-1,-9999,-9999,14,1,15,0.45f,0.41f,0.35f};
-	pixels[6]={6,"Sar-pixel",0,8,20,7,10,2,26,16,10,22,-1,-9999,-9999,5,15,82,0.32f,0.22f,0.14f};
-	pixels[7]={7,"Nyers Agyag",0,10,28,9,20,3,28,22,15,25,-1,1100,2200,7,12,75,0.62f,0.46f,0.38f};
-	pixels[8]={8,"Soder-pixel",0,14,32,18,1,5,30,8,5,19,-1,1300,2400,24,0,34,0.55f,0.54f,0.52f};
-	pixels[9]={9,"Tozeg-pixel",0,5,16,4,10,3,12,12,8,8,180,-9999,-9999,6,1,8,0.24f,0.18f,0.12f};
-	pixels[10]={10,"Szaraz Avar",0,1,3,1,15,5,3,2,1,4,120,-9999,-9999,45,0,35,0.58f,0.38f,0.16f};
+	pixels[1]={1,"Termekeny Fold (Humusz)",0,5,12,4,5,1,18,10,6,12,250,-9999,-9999,8,5,10,0.32f,0.21f,0.13f};
+	pixels[2]={2,"Magas Humuszu Fold",0,6,15,5,6,1,19,12,8,13,280,-9999,-9999,9,6,14,0.20f,0.14f,0.09f};
+	pixels[3]={3,"Mocsari Fold",0,7,18,6,8,1,22,14,9,16,-1,-9999,-9999,6,10,25,0.18f,0.20f,0.18f};
+	pixels[4]={4,"Vizes Iszap",0,5,16,4,12,2,25,12,7,20,-1,-9999,-9999,4,18,86,0.25f,0.23f,0.19f};
+	pixels[5]={5,"Kiszaradt Iszap",0,9,22,12,3,1,20,18,12,14,-1,-9999,-9999,14,1,15,0.42f,0.38f,0.32f};
+	pixels[6]={6,"Sar-pixel",0,8,20,7,10,2,26,16,10,22,-1,-9999,-9999,5,15,82,0.29f,0.19f,0.12f};
+	pixels[7]={7,"Nyers Agyag",0,10,28,9,20,3,28,22,15,25,-1,1100,2200,7,12,75,0.58f,0.42f,0.34f};
+	pixels[8]={8,"Soder-pixel",0,14,32,18,1,5,30,8,5,19,-1,1300,2400,24,0,34,0.50f,0.49f,0.47f};
+	pixels[9]={9,"Tozeg-pixel",0,5,16,4,10,3,12,12,8,8,180,-9999,-9999,6,1,8,0.22f,0.16f,0.10f};
+	pixels[10]={10,"Szaraz Avar",0,1,3,1,15,5,3,2,1,4,120,-9999,-9999,45,0,35,0.54f,0.34f,0.14f};
 	pixels[11]={11,"Ho-pixel",0,4,12,5,6,3,14,10,6,15,-1,0,100,8,3,80,0.95f,0.97f,1.00f};
 	pixels[12]={12,"Sullyedo Ho",0,2,5,2,2,1,12,1,1,45,-1,-5,100,4,3,75,0.88f,0.93f,0.98f};
 	pixels[13]={13,"Csuszos Jeghartya",0,10,20,16,2,6,19,10,6,28,-1,0,100,42,4,98,0.72f,0.88f,0.98f};
 	pixels[14]={14,"Foszilia-csont",1,38,95,42,4,6,30,65,45,16,-1,1600,2800,40,1,26,0.82f,0.79f,0.70f};
 	pixels[15]={15,"Foszilia-mesz",1,32,80,35,2,5,32,55,38,22,-1,1400,2500,36,0,24,0.78f,0.76f,0.72f};
 	pixels[16]={16,"Denever-guano",0,3,8,3,5,1,10,5,3,10,150,-9999,-9999,5,8,45,0.30f,0.28f,0.25f};
-	pixels[17]={17,"Ko-pixel (Sima Meszko)",1,35,90,38,2,5,35,60,42,25,-1,1350,2500,36,0,22,0.50f,0.50f,0.52f};
-	pixels[18]={18,"Repedezett Ko",0,4,6,28,0,2,32,1,1,24,-1,1350,2500,50,0,20,0.44f,0.44f,0.46f};
-	pixels[19]={19,"Eros Ko",2,75,210,72,3,7,42,140,100,28,-1,1500,2700,46,0,22,0.36f,0.37f,0.40f};
-	pixels[20]={20,"Andezit-pixel",1,48,125,50,2,6,42,85,60,27,-1,1450,2600,46,0,22,0.42f,0.43f,0.45f};
+	pixels[17]={17,"Ko-pixel (Sima Meszko)",1,35,90,38,2,5,35,60,42,25,-1,1350,2500,36,0,22,0.45f,0.46f,0.49f};
+	pixels[18]={18,"Repedezett Ko",0,4,6,28,0,2,32,1,1,24,-1,1350,2500,50,0,20,0.40f,0.41f,0.43f};
+	pixels[19]={19,"Eros Ko",2,75,210,72,3,7,42,140,100,28,-1,1500,2700,46,0,22,0.28f,0.31f,0.36f};
+	pixels[20]={20,"Andezit-pixel",1,48,125,50,2,6,42,85,60,27,-1,1450,2600,46,0,22,0.34f,0.37f,0.42f};
 	pixels[21]={21,"Diorit-pixel",1,52,135,54,2,6,44,92,65,30,-1,1500,2700,50,0,25,0.72f,0.72f,0.74f};
 	pixels[22]={22,"Marvany-pixel",1,44,115,45,3,7,39,78,55,30,-1,1400,2550,44,0,52,0.92f,0.91f,0.94f};
 	pixels[23]={23,"Gubbancsko-pixel",2,65,160,60,10,300,38,70,50,95,-1,1600,2800,80,0,24,0.85f,0.35f,0.15f};
-	pixels[24]={24,"Szen-pixel",1,24,60,26,2,3,26,40,28,18,350,-9999,-9999,28,14,24,0.14f,0.14f,0.15f};
+	pixels[24]={24,"Szen-pixel",1,24,60,26,2,3,26,40,28,18,350,-9999,-9999,28,14,24,0.15f,0.16f,0.19f};
 	pixels[25]={25,"Vas-pixel",2,70,200,68,8,8,50,150,110,58,-1,1538,2860,48,55,26,0.68f,0.62f,0.58f};
 	pixels[26]={26,"Rez-pixel",2,55,160,52,28,10,54,115,80,85,-1,1085,2560,44,92,34,0.82f,0.45f,0.25f};
 	pixels[27]={27,"Foldalatti Vasfa",2,68,190,65,16,9,40,140,100,18,1200,-9999,-9999,40,8,22,0.32f,0.33f,0.36f};
 	pixels[28]={28,"Kvarc-pixel",2,60,150,75,0,8,37,95,68,34,-1,1670,2950,65,4,48,0.94f,0.92f,0.96f};
-	pixels[29]={29,"Kint-pixel (Kinetikus Erc)",3,140,380,130,22,15,40,280,210,35,-1,1850,3200,45,60,32,0.25f,0.78f,0.95f};
+	pixels[29]={29,"Kint-pixel (Kinetikus Erc)",3,140,380,130,22,15,40,280,210,35,-1,1850,3200,45,60,32,0.12f,0.76f,0.98f};
 	pixels[30]={30,"Smaragd-pixel",4,200,520,190,0,9,34,340,250,36,-1,2100,3500,72,0,58,0.12f,0.82f,0.35f};
-	pixels[31]={31,"Loncore-pixel (Feny-Erc)",4,250,650,100,20,14,45,480,360,60,-1,2400,3800,75,75,35,0.98f,0.88f,0.32f};
+	pixels[31]={31,"Loncore-pixel (Feny-Erc)",4,250,650,100,20,14,45,480,360,60,-1,2400,3800,75,75,35,1.00f,0.84f,0.22f};
 	pixels[32]={32,"Gyemant-pixel",5,450,1200,400,5,18,40,850,680,100,4000,3550,4800,98,0,75,0.55f,0.95f,1.00f};
-	pixels[33]={33,"Tolgy-kemenyfa",1,32,85,30,16,8,22,75,55,11,280,-9999,-9999,34,0,20,0.55f,0.40f,0.24f};
-	pixels[34]={34,"Tolgyfakereg",0,12,25,11,10,3,12,20,14,8,240,-9999,-9999,16,0,18,0.38f,0.27f,0.16f};
-	pixels[35]={35,"Tolgyfalevel",0,2,6,2,20,8,4,5,3,5,160,-9999,-9999,4,0,30,0.20f,0.52f,0.16f};
-	pixels[36]={36,"Tolgy-gyoker",1,28,75,26,24,8,20,80,60,10,300,-9999,-9999,25,0,18,0.42f,0.30f,0.18f};
-	pixels[37]={37,"Makk-hej",0,14,28,18,5,6,16,15,10,10,220,-9999,-9999,22,0,30,0.48f,0.32f,0.16f};
-	pixels[38]={38,"Makk-belso (Mag)",0,5,10,6,8,4,12,6,4,8,200,-9999,-9999,8,0,25,0.78f,0.68f,0.42f};
+	pixels[33]={33,"Tolgy-kemenyfa",1,32,85,30,16,8,22,75,55,11,280,-9999,-9999,34,0,20,0.56f,0.39f,0.22f};
+	pixels[34]={34,"Tolgyfakereg",0,12,25,11,10,3,12,20,14,8,240,-9999,-9999,16,0,18,0.32f,0.22f,0.13f};
+	pixels[35]={35,"Tolgyfalevel",0,2,6,2,20,8,4,5,3,5,160,-9999,-9999,4,0,30,0.16f,0.46f,0.13f};
+	pixels[36]={36,"Tolgy-gyoker",1,28,75,26,24,8,20,80,60,10,300,-9999,-9999,25,0,18,0.36f,0.25f,0.15f};
+	pixels[37]={37,"Makk-hej",0,14,28,18,5,6,16,15,10,10,220,-9999,-9999,22,0,30,0.46f,0.30f,0.14f};
+	pixels[38]={38,"Makk-belso (Mag)",0,5,10,6,8,4,12,6,4,8,200,-9999,-9999,8,0,25,0.76f,0.64f,0.38f};
 	pixels[39]={39,"Felszini Vasfa-torzs",2,65,185,62,18,8,38,135,95,15,1100,-9999,-9999,38,5,22,0.38f,0.39f,0.42f};
 	pixels[40]={40,"Vasfa-level",1,18,40,22,25,10,12,25,18,20,600,-9999,-9999,30,10,35,0.50f,0.54f,0.56f};
 	pixels[41]={41,"Mangrove-fa",1,30,80,28,20,8,24,70,50,12,320,-9999,-9999,30,0,22,0.45f,0.28f,0.20f};
@@ -65,12 +65,12 @@ void PixelDatabase::init_database() {
 	pixels[48]={48,"Fenyotoboz",0,8,16,10,8,5,9,8,5,8,170,-9999,-9999,14,0,26,0.40f,0.28f,0.16f};
 	pixels[49]={49,"Fenyogyanta",0,8,18,9,12,3,12,10,6,8,130,80,200,14,0,40,0.92f,0.68f,0.12f};
 	pixels[50]={50,"Korhadtfa es Holtfa",0,9,20,8,6,3,10,14,9,7,180,-9999,-9999,12,0,20,0.32f,0.28f,0.22f};
-	pixels[51]={51,"Zold Fu-pixel",0,2,5,1,25,8,4,4,2,6,160,-9999,-9999,3,2,40,0.28f,0.62f,0.20f};
-	pixels[52]={52,"Magas Fu-pixel",0,3,8,2,28,8,5,5,3,6,150,-9999,-9999,4,2,38,0.24f,0.56f,0.18f};
+	pixels[51]={51,"Zold Fu-pixel",0,2,5,1,25,8,4,4,2,6,160,-9999,-9999,3,2,40,0.20f,0.49f,0.14f};
+	pixels[52]={52,"Magas Fu-pixel",0,3,8,2,28,8,5,5,3,6,150,-9999,-9999,4,2,38,0.22f,0.53f,0.15f};
 	pixels[53]={53,"Szaraz Fu-pixel",0,2,4,1,20,6,3,3,2,5,90,-9999,-9999,6,0,42,0.72f,0.64f,0.28f};
-	pixels[54]={54,"Viragszirom",0,1,3,1,22,6,2,2,1,4,140,-9999,-9999,2,0,35,0.95f,0.35f,0.55f};
-	pixels[55]={55,"Viragszar",0,4,9,3,30,8,4,6,4,5,160,-9999,-9999,4,2,30,0.30f,0.60f,0.22f};
-	pixels[56]={56,"Moha-pixel",0,3,10,2,35,12,14,8,5,10,220,-9999,-9999,3,6,45,0.22f,0.52f,0.18f};
+	pixels[54]={54,"Viragszirom",0,1,3,1,22,6,2,2,1,4,140,-9999,-9999,2,0,35,0.96f,0.28f,0.48f};
+	pixels[55]={55,"Viragszar",0,4,9,3,30,8,4,6,4,5,160,-9999,-9999,4,2,30,0.24f,0.54f,0.18f};
+	pixels[56]={56,"Moha-pixel",0,3,10,2,35,12,14,8,5,10,220,-9999,-9999,3,6,45,0.18f,0.46f,0.14f};
 	pixels[57]={57,"Logo Inda-rost",1,16,45,8,50,12,9,35,25,5,190,-9999,-9999,5,2,20,0.26f,0.48f,0.20f};
 	pixels[58]={58,"Tuskes Inda-tovis",1,22,50,28,10,5,14,28,20,8,200,-9999,-9999,18,0,15,0.35f,0.22f,0.16f};
 	pixels[59]={59,"Spark bogyo-hus",1,5,12,4,18,6,8,6,4,30,80,-9999,-9999,6,25,35,1.00f,0.65f,0.10f};
@@ -92,7 +92,7 @@ void PixelDatabase::init_database() {
 	pixels[75]={75,"Bel-pixel",1,12,140,9,65,15,15,28,20,18,-1,-9999,-9999,5,18,45,0.82f,0.58f,0.55f};
 	pixels[76]={76,"Er-pixel (Verer)",1,10,100,7,45,10,16,15,10,28,-1,-9999,-9999,5,35,35,0.95f,0.05f,0.08f};
 	pixels[77]={77,"Szem-pixel",0,4,40,4,25,8,15,6,4,20,-1,-9999,-9999,4,25,70,0.95f,0.95f,0.98f};
-	pixels[78]={78,"Ful-pixel",1,9,90,8,38,10,14,14,9,18,-1,-9999,-9999,95,20,30,0.85f,0.68f,0.58f};
+	pixels[78]={78,"Ful-pixel",1,9,90,8,38,10,14,14,9,18,-1,-9999,-9999,95,20,30,0.86f,0.68f,0.56f};
 	pixels[79]={79,"Szaglo-pixel",1,9,95,8,32,8,15,14,9,20,-1,-9999,-9999,6,22,35,0.82f,0.62f,0.54f};
 	pixels[80]={80,"Nyelv-pixel",1,14,150,12,50,10,20,20,14,22,-1,-9999,-9999,6,25,40,0.85f,0.35f,0.42f};
 	pixels[81]={81,"Tarantula-meregzacsko",1,12,85,9,35,8,16,14,9,18,-1,-9999,-9999,5,20,35,0.45f,0.78f,0.20f};
@@ -102,7 +102,7 @@ void PixelDatabase::init_database() {
 	pixels[85]={85,"Feher Halhus",0,7,75,6,28,5,18,10,6,20,-1,-9999,-9999,4,22,40,0.92f,0.85f,0.82f};
 	pixels[86]={86,"Fagyhal-hus",1,12,105,10,30,6,20,16,11,10,-1,-9999,-9999,5,20,45,0.75f,0.88f,0.95f};
 	pixels[87]={87,"Hullo- es Keteltuhus",1,12,115,10,35,8,20,18,12,18,-1,-9999,-9999,5,20,35,0.65f,0.75f,0.58f};
-	pixels[88]={88,"Rakhus-pixel",0,7,70,6,22,5,17,9,6,18,-1,-9999,-9999,4,20,35,0.95f,0.78f,0.72f};
+	pixels[88]={88,"Rakhus-pixel",0,7,70,6,22,5,17,9,6,18,-1,-9999,-9999,4,20,35,0.96f,0.78f,0.68f};
 	pixels[89]={89,"Vekony Csont",1,22,55,26,10,6,16,35,24,12,-1,1500,2700,32,1,28,0.90f,0.88f,0.82f};
 	pixels[90]={90,"Normal Csont",1,35,90,38,8,8,26,60,42,14,-1,1600,2800,38,1,28,0.92f,0.90f,0.84f};
 	pixels[91]={91,"Nehez Oriascsont",2,58,165,60,6,7,36,110,80,16,-1,1700,2900,42,1,26,0.86f,0.84f,0.76f};
@@ -138,9 +138,9 @@ void PixelDatabase::init_database() {
 	pixels[121]={121,"Vastag Ragadozoprem",1,12,38,6,48,14,8,16,11,2,210,-9999,-9999,2,0,22,0.36f,0.26f,0.18f};
 	pixels[122]={122,"Sima Gyapju",1,5,20,2,50,15,5,8,5,2,200,-9999,-9999,1,0,18,0.94f,0.93f,0.90f};
 	pixels[123]={123,"Gondor Rackagyapju",1,9,32,4,55,18,7,14,9,1,230,-9999,-9999,1,0,16,0.86f,0.84f,0.78f};
-	pixels[124]={124,"Alaptoll es Pehelytoll",0,1,4,1,30,15,1,2,1,2,160,-9999,-9999,2,0,38,0.96f,0.96f,0.96f};
+	pixels[124]={124,"Alaptoll es Pehelytoll",0,1,4,1,30,15,1,2,1,2,160,-9999,-9999,2,0,38,0.96f,0.96f,0.98f};
 	pixels[125]={125,"Diszes Facantoll",0,2,7,2,35,16,1,4,2,2,170,-9999,-9999,3,0,40,0.85f,0.42f,0.16f};
-	pixels[126]={126,"Fekete Varju- es Hollotoll",1,3,10,3,38,16,2,6,4,3,180,-9999,-9999,3,0,42,0.12f,0.12f,0.14f};
+	pixels[126]={126,"Fekete Varju- es Hollotoll",1,3,10,3,38,16,2,6,4,3,180,-9999,-9999,3,0,42,0.10f,0.11f,0.13f};
 	pixels[127]={127,"Ragadozo Evezotoll",1,6,18,5,45,20,2,12,8,3,200,-9999,-9999,4,0,45,0.38f,0.30f,0.24f};
 	pixels[128]={128,"Kitin-pixel",2,44,115,48,16,12,16,60,42,9,320,-9999,-9999,28,0,42,0.26f,0.22f,0.20f};
 	pixels[129]={129,"Szoros Tarantula-kitin",2,40,105,42,20,10,15,55,38,8,280,-9999,-9999,15,0,25,0.18f,0.15f,0.14f};
@@ -215,9 +215,14 @@ static float smooth_noise3(float x, float y, float z, int seed) {
 }
 
 static int get_global_terrain_y(int gx, int gz, int seed) {
-	float n1 = smooth_noise3(gx * 0.006f, 0.0f, gz * 0.006f, seed) * 10.0f;
-	float n2 = smooth_noise3(gx * 0.02f, 0.0f, gz * 0.02f, seed + 101) * 2.5f;
-	return CLAMP((int)(14.0f + n1 + n2), 8, 30);
+	float n1 = smooth_noise3(gx * 0.0055f, 0.0f, gz * 0.0055f, seed) * 12.0f;
+	float n2 = smooth_noise3(gx * 0.018f, 0.0f, gz * 0.018f, seed + 101) * 3.0f;
+	return CLAMP((int)(14.0f + n1 + n2), 7, 32);
+}
+
+static inline int floor_div_int(int a, int b) {
+	int d = a / b, r = a % b;
+	return (r != 0 && ((r < 0) ^ (b < 0))) ? (d - 1) : d;
 }
 
 VoxelBody3D::VoxelBody3D() {
@@ -234,7 +239,7 @@ void VoxelBody3D::ensure_render_resources() {
 	if (voxel_material.is_null()) {
 		voxel_material.instantiate();
 		voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-		voxel_material->set_roughness(0.88f);
+		voxel_material->set_roughness(0.84f);
 		set_material_override(voxel_material);
 	}
 }
@@ -282,7 +287,6 @@ int VoxelBody3D::get_voxel(int x, int y, int z) const { return is_valid_coord(x,
 int VoxelBody3D::get_voxel_durability(int x, int y, int z) const { return is_valid_coord(x, y, z) ? voxel_durability.ptr()[get_index(x, y, z)] : 0; }
 PackedByteArray VoxelBody3D::get_voxel_ids_buffer() const { return voxel_ids; }
 
-// Csak a szilárd talajt nézi (a fűszálakon 52 és virágokon 54, 55 NEM lehet járni!)
 int VoxelBody3D::get_surface_y(int x, int z) const {
 	if (x < 0 || x >= size_x || z < 0 || z >= size_z) return 14;
 	const uint8_t* ids_r = voxel_ids.ptr();
@@ -293,7 +297,6 @@ int VoxelBody3D::get_surface_y(int x, int z) const {
 	return 14;
 }
 
-// Részletes, faágas, szellős lombkoronájú, egyenes Tölgyfa (nem érnek össze!):
 void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx, int tree_gz, int tree_base_y, int seed) {
 	if (tree_gx + 55 < gx_min || tree_gx - 55 >= gx_min + size_x || tree_gz + 55 < gz_min || tree_gz - 55 >= gz_min + size_z) return;
 
@@ -315,9 +318,9 @@ void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx,
 		}
 	};
 
-	// 1. Földbe kapaszkodó Tölgy-gyökerek (36)
+	float rot_off = fast_hash(tree_gx, 9, tree_gz, seed) * 6.2831f;
 	for (int r = 0; r < 5; ++r) {
-		float ang = r * 1.2566f + fast_hash(r, tree_gx, tree_gz, seed) * 0.3f;
+		float ang = rot_off + r * 1.2566f + fast_hash(r, tree_gx, tree_gz, seed) * 0.3f;
 		float dx = std::cos(ang), dz = std::sin(ang);
 		for (int step = 3; step < 16; ++step) {
 			int rx = (int)(tree_gx + dx * step), rz = (int)(tree_gz + dz * step), ry = (int)(tree_base_y + 2.5f - step * 0.25f);
@@ -330,13 +333,12 @@ void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx,
 		}
 	}
 
-	// 2. Egyenes, felfelé keskenyedő fatörzs: belül Keményfa (33), kívül Kéreg (34)
-	int trunk_h = 68;
+	int trunk_h = 58 + (int)(fast_hash(tree_gx, 3, tree_gz, seed) * 16.0f);
 	for (int h = 0; h < trunk_h; ++h) {
-		float cx = tree_gx + std::sin(h * 0.05f) * 1.2f;
-		float cz = tree_gz + std::cos(h * 0.05f) * 1.2f;
+		float cx = tree_gx + std::sin(h * 0.05f + rot_off) * 1.1f;
+		float cz = tree_gz + std::cos(h * 0.05f + rot_off) * 1.1f;
 		int cy = tree_base_y + h;
-		float rad = 6.2f - (float)h / trunk_h * 2.5f + (h < 6 ? (6 - h) * 0.3f : 0.0f);
+		float rad = 6.0f - (float)h / trunk_h * 2.4f + (h < 6 ? (6 - h) * 0.3f : 0.0f);
 		int ir = (int)std::ceil(rad);
 		for (int dz = -ir; dz <= ir; ++dz)
 			for (int dx = -ir; dx <= ir; ++dx) {
@@ -346,26 +348,26 @@ void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx,
 			}
 	}
 
-	// 3. Részletes, 3 szintű faág-rendszer (Főágak -> Mellékágak -> Gallyak) + szellős levélcsomók az ágak végén:
 	for (int b = 0; b < 9; ++b) {
-		int start_h = 40 + (b * 3);
-		float ang = b * 2.39996f; // Aranymetszés szög, hogy minden irányba természetesen ágazzon
+		int start_h = (trunk_h - 26) + (b * 3);
+		float ang = rot_off + b * 2.39996f;
 		float dir_x = std::cos(ang), dir_z = std::sin(ang);
-		float pitch = 0.32f + (b % 3) * 0.12f;
-		int b_len = 22 + (b % 3) * 4;
+		float pitch = 0.32f + (b % 3) * 0.11f;
+		int b_len = 20 + (b % 3) * 4;
 		float bx = (float)tree_gx, by = (float)(tree_base_y + start_h), bz = (float)tree_gz;
 
 		for (int step = 1; step <= b_len; ++step) {
 			bx += dir_x; bz += dir_z; by += pitch;
 			int brad = (step < 8) ? 2 : 1;
 			for (int oz = -brad; oz <= brad; ++oz)
+				for (int oy = -brad; oy <= rad_check(brad); ++oy) {}
+			for (int oz = -brad; oz <= brad; ++oz)
 				for (int oy = -brad; oy <= brad; ++oy)
 					for (int ox = -brad; ox <= brad; ++ox)
 						if (ox*ox + oy*oy + oz*oz <= brad*brad)
 							set_voxel((int)bx + ox - gx_min, (int)by + oy, (int)bz + oz - gz_min, (brad == 2 && ox==0 && oy==0 && oz==0) ? 33 : 34);
 
-			// Mellékágak (Sub-branches) kiágazása a főág közepén és végén:
-			if (step == 12 || step == b_len - 4) {
+			if (step == 11 || step == b_len - 4) {
 				for (int side = -1; side <= 1; side += 2) {
 					float sang = ang + side * 0.75f;
 					float sx = bx, sy = by, sz = bz;
@@ -378,12 +380,10 @@ void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx,
 				}
 			}
 		}
-		// Főág végén lévő levélfürt + lelógó Makk (37, 38):
 		draw_leaf_cluster(bx, by + 2.5f, bz, 8.0f);
 		set_voxel((int)bx - gx_min, (int)by - 2, (int)bz - gz_min, 37);
 		set_voxel((int)bx - gx_min, (int)by - 3, (int)bz - gz_min, 38);
 	}
-	// Felső korona-csúcs levélcsomói:
 	draw_leaf_cluster((float)tree_gx, (float)(tree_base_y + trunk_h + 6), (float)tree_gz, 10.5f);
 }
 
@@ -406,7 +406,6 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 				}
 				set_voxel(x, y, z, pid);
 			}
-			// NAGYON RÖVID (1-2 pixeles) ritkás fűszálak (52) és apró 2 pixeles virágok (55+54):
 			float fl = fast_hash(gx, surf_y, gz, world_seed + 99);
 			if (fl < 0.018f) {
 				int gh = 1 + (int)(fast_hash(gx, 1, gz, world_seed) * 2.0f);
@@ -417,20 +416,36 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 			}
 		}
 	}
-	// Természetes Mohás Szikla (csak 1 helyen, távol a fától):
-	if (chunk_x == 0 && chunk_z == 0) {
-		int ry_base = get_global_terrain_y(16, 42, world_seed);
-		for (int dz = -7; dz <= 7; ++dz)
-			for (int dy = -3; dy <= 8; ++dy)
-				for (int dx = -8; dx <= 8; ++dx)
-					if ((dx*dx)/55.0f + (dy*dy)/32.0f + (dz*dz)/48.0f <= 1.0f)
-						set_voxel(16 + dx, ry_base + dy, 42 + dz, (dy > 4) ? 56 : 17);
-	}
-	// Két különálló, egymástól 135 pixelre lévő Tölgyfa (soha nem érnek össze!):
-	const int trees[2][2] = {{42, 42}, {-45, -40}};
-	for (int t = 0; t < 2; ++t) {
-		int tgx = trees[t][0], tgz = trees[t][1];
-		place_giant_oak_in_sector(gx_min, gz_min, tgx, tgz, get_global_terrain_y(tgx, tgz, world_seed), world_seed + t * 53);
+
+	// VÉGTELENÍTETT FA- ÉS MOHÁS SZIKLA GENERÁLÁS (104x104 pixeles globális cellákban, bárhova mész!):
+	const int CELL = 104;
+	int center_cx = floor_div_int(gx_min + size_x / 2, CELL);
+	int center_cz = floor_div_int(gz_min + size_z / 2, CELL);
+
+	for (int tcz = center_cz - 1; tcz <= center_cz + 1; ++tcz) {
+		for (int tcx = center_cx - 1; tcx <= center_cx + 1; ++tcx) {
+			int cell_seed = world_seed + tcx * 73856093 ^ tcz * 19349663;
+			float tree_roll = fast_hash(tcx, 11, tcz, world_seed);
+			if ((tcx == 0 && tcz == 0) || tree_roll < 0.72f) {
+				int tgx = tcx * CELL + 28 + (int)(fast_hash(tcx, 23, tcz, world_seed) * 48.0f);
+				int tgz = tcz * CELL + 28 + (int)(fast_hash(tcx, 37, tcz, world_seed) * 48.0f);
+				if (tcx == 0 && tcz == 0) { tgx = 42; tgz = 42; }
+				place_giant_oak_in_sector(gx_min, gz_min, tgx, tgz, get_global_terrain_y(tgx, tgz, world_seed), cell_seed);
+			}
+			// Természetes Mohás Sziklák (~40% eséllyel a cellák sarkában):
+			if (fast_hash(tcx, 59, tcz, world_seed) < 0.42f) {
+				int rgx = tcx * CELL + 12 + (int)(fast_hash(tcx, 61, tcz, world_seed) * 14.0f);
+				int rgz = tcz * CELL + 76 + (int)(fast_hash(tcx, 67, tcz, world_seed) * 14.0f);
+				if (rgx + 10 >= gx_min && rgx - 10 < gx_min + size_x && rgz + 10 >= gz_min && rgz - 10 < gz_min + size_z) {
+					int ry_base = get_global_terrain_y(rgx, rgz, world_seed);
+					for (int dz = -7; dz <= 7; ++dz)
+						for (int dy = -3; dy <= 7; ++dy)
+							for (int dx = -7; dx <= 7; ++dx)
+								if ((dx*dx)/45.0f + (dy*dy)/28.0f + (dz*dz)/42.0f <= 1.0f)
+									set_voxel(rgx + dx - gx_min, ry_base + dy, rgz + dz - gz_min, (dy > 3) ? 56 : 17);
+				}
+			}
+		}
 	}
 	recalculate_mass_and_center(); rebuild_mesh();
 }
@@ -477,7 +492,6 @@ void VoxelBody3D::recalculate_mass_and_center() {
 	center_of_mass = (total_mass_pm > 0) ? Vector3((float)(sx/total_mass_pm)*voxel_scale, (float)(sy/total_mass_pm)*voxel_scale, (float)(sz/total_mass_pm)*voxel_scale) : Vector3(0,0,0);
 }
 
-// 60 FPS GREEDY MESHER + FAKÉREG-EREZET + AMBIENT OCCLUSION (AO) GRAFKA:
 void VoxelBody3D::rebuild_mesh() {
 	ensure_render_resources(); voxel_mesh->clear_surfaces();
 	PackedVector3Array vertices, normals; PackedColorArray colors;
@@ -488,17 +502,16 @@ void VoxelBody3D::rebuild_mesh() {
 		uint8_t id = ids_r[idx]; if (id == 0) return 0;
 		int32_t md = PixelDatabase::get_pixel_fast(id).max_durability;
 		int hp_b = (md > 0) ? CLAMP((dur_r[idx] * 4) / md, 1, 4) : 4;
-		// Természetes mikro-erezet (fakéregnél függőleges barázdák, lombnál/fűnél színvariáció) + AO sarok-árnyék:
-		int grain = (id == 34 || id == 33) ? ((int)(fast_hash(x, y / 4, z, 11) * 3.0f)) : ((int)(fast_hash(x, y, z, 17) * 3.0f));
+		int grain = (id == 34 || id == 33) ? ((int)(fast_hash(x, y / 3, z, 11) * 3.0f)) : ((int)(fast_hash(x, y, z, 17) * 3.0f));
 		if (y + 1 < size_y && (ids_r[get_index(MIN(size_x-1,x+1), y+1, z)] != 0 || ids_r[get_index(x, y+1, MIN(size_z-1,z+1))] != 0)) {
-			grain = MAX(0, grain - 1); // Mélyedés-árnyék (Ambient Occlusion)
+			grain = MAX(0, grain - 1);
 		}
 		uint16_t shade = (uint16_t)CLAMP(hp_b * 2 + grain - 2, 1, 7);
 		return ((uint16_t)id << 3) | shade;
 	};
 	auto key_to_color = [&](uint16_t key, float dir_light) -> Color {
 		const PixelProperties& p = PixelDatabase::get_pixel_fast((uint8_t)(key >> 3));
-		float r = (0.42f + 0.58f * ((float)(key & 7) / 7.0f)) * dir_light;
+		float r = (0.50f + 0.50f * ((float)(key & 7) / 7.0f)) * dir_light;
 		return Color(p.r * r, p.g * r, p.b * r, 1.0f);
 	};
 	auto add_quad = [&](const Vector3& v0, const Vector3& v1, const Vector3& v2, const Vector3& v3, const Vector3& norm, const Color& col) {
@@ -510,7 +523,7 @@ void VoxelBody3D::rebuild_mesh() {
 	std::vector<uint16_t> mask_xz(size_x * size_z);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dy = (dir == 0) ? 1 : -1;
-		float dl = (dir == 0) ? 1.05f : 0.55f;
+		float dl = (dir == 0) ? 0.98f : 0.48f;
 		for (int y = 0; y <= y_lim; ++y) {
 			bool any = false;
 			for (int z = 0; z < size_z; ++z)
@@ -544,7 +557,7 @@ void VoxelBody3D::rebuild_mesh() {
 	std::vector<uint16_t> mask_xy(size_x * y_count);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dz_s = (dir == 0) ? 1 : -1;
-		float dl = (dir == 0) ? 0.90f : 0.72f;
+		float dl = (dir == 0) ? 0.86f : 0.68f;
 		for (int z = 0; z < size_z; ++z) {
 			bool any = false;
 			for (int y = 0; y < y_count; ++y)
@@ -577,7 +590,7 @@ void VoxelBody3D::rebuild_mesh() {
 	std::vector<uint16_t> mask_zy(size_z * y_count);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dx_s = (dir == 0) ? 1 : -1;
-		float dl = (dir == 0) ? 0.84f : 0.78f;
+		float dl = (dir == 0) ? 0.80f : 0.74f;
 		for (int x = 0; x < size_x; ++x) {
 			bool any = false;
 			for (int y = 0; y < y_count; ++y)
@@ -614,7 +627,6 @@ void VoxelBody3D::rebuild_mesh() {
 	}
 }
 
-// KIZÁRÓLAG A KÜLSŐ (LEVEGŐVEL ÉRINTKEZŐ) FELÜLETI PIXELEKET ÉRHETI TALÁLAT!
 Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius, int attacker_pixel_id, float impact_speed, float attacker_mass_pm, float k_forma, float damage_scale, int light_level) {
 	Dictionary result; uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
 	float attacker_hardness = 10.0f; int32_t attacker_max_dur = 180;
@@ -650,7 +662,6 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 					int vx = hit_pos.x + dx, vy = hit_pos.y + dy, vz = hit_pos.z + dz;
 					if (is_valid_coord(vx, vy, vz)) {
 						int idx = get_index(vx, vy, vz);
-						// Belső, eltakart pixelt TILOS közvetlenül sebezni! Csak a külső felületet:
 						if (ids_w[idx] != 0 && is_exposed_to_air(vx, vy, vz)) contacted.push_back(idx);
 					}
 				}
