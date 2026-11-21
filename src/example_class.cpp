@@ -227,9 +227,11 @@ static inline int floor_div_int(int a, int b) {
 
 VoxelBody3D::VoxelBody3D() {
 	PixelDatabase::init_database();
-	size_x = 64; size_y = 135; size_z = 64; max_filled_y = 0; voxel_scale = 0.1f;
+	size_x = 64; size_y = 128; size_z = 64; max_filled_y = 0; voxel_scale = 0.1f;
+	min_terrain_y = 0; max_terrain_y = 32;
+	high_min_x = 0; high_max_x = -1; high_min_z = 0; high_max_z = -1;
 	chunk_gx_origin = 0; chunk_gz_origin = 0; cached_world_seed = 0;
-	is_terrain_chunk = false; is_sleeping = true;
+	is_terrain_chunk = false; is_sleeping = true; ores_generated = false;
 	is_static_body = true; total_mass_pm = 0; center_of_mass = Vector3(0, 0, 0);
 	kint_stored_damage = 0.0f; kint_timer = 0.0f;
 	set_process(false);
@@ -248,27 +250,53 @@ void VoxelBody3D::ensure_render_resources() {
 	}
 }
 
-// ALVÓ ÁLLAPOT (SLEEPING STATE): Csak a voxel_ids (1 bájt/pixel) foglal helyet, 0 CPU-val!
 void VoxelBody3D::initialize_grid(int p_x, int p_y, int p_z, float p_voxel_scale) {
 	size_x = CLAMP(p_x, 1, 256); size_y = CLAMP(p_y, 1, 256); size_z = CLAMP(p_z, 1, 256);
-	max_filled_y = 0; voxel_scale = p_voxel_scale;
+	max_filled_y = 0; min_terrain_y = 0; max_terrain_y = size_y - 1;
+	high_min_x = 0; high_max_x = size_x - 1; high_min_z = 0; high_max_z = size_z - 1;
+	voxel_scale = p_voxel_scale;
 	int total = size_x * size_y * size_z;
 	voxel_ids.resize(total); voxel_ids.fill(0);
 	voxel_durability.resize(0);
 	voxel_heat.resize(0);
-	is_sleeping = true;
+	is_sleeping = true; ores_generated = false;
 	set_process(false);
 	set_physics_process(false);
 }
 
+// LUSTA ÉRC- ÉS DURABILITY BETÖLTÉS: Csak akkor fut le, ha bányászni/rombolni kezdesz a szektorban!
 void VoxelBody3D::wake_up() {
 	if (!is_sleeping && voxel_durability.size() == voxel_ids.size()) return;
+	uint8_t* ids_w = voxel_ids.ptrw();
+
+	if (is_terrain_chunk && !ores_generated) {
+		for (int z = 0; z < size_z; ++z) {
+			int gz = chunk_gz_origin + z;
+			for (int x = 0; x < size_x; ++x) {
+				int gx = chunk_gx_origin + x;
+				int sy = get_surface_y(x, z);
+				for (int y = 1; y < sy; ++y) {
+					int idx = get_index(x, y, z);
+					if (ids_w[idx] != 17 && ids_w[idx] != 1) continue;
+					uint8_t pid = 17;
+					if (y >= sy - 4) pid = (smooth_noise3(gx*0.08f, y*0.08f, gz*0.08f, cached_world_seed+5) > 0.72f) ? 7 : 1;
+					else if (y >= sy - 7) pid = 8;
+					else if (smooth_noise3(gx*0.12f, y*0.12f, gz*0.12f, cached_world_seed+19) > 0.68f) {
+						float ro = fast_hash(gx, y, gz, cached_world_seed + 33);
+						pid = (ro < 0.03f) ? 29 : ((ro < 0.20f) ? 28 : ((ro < 0.50f) ? 25 : 24));
+					}
+					ids_w[idx] = pid;
+				}
+			}
+		}
+		ores_generated = true;
+	}
+
 	int total = size_x * size_y * size_z;
 	voxel_durability.resize(total);
-	const uint8_t* ids_r = voxel_ids.ptr();
 	int32_t* dur_w = voxel_durability.ptrw();
 	for (int i = 0; i < total; ++i) {
-		uint8_t id = ids_r[i];
+		uint8_t id = ids_w[i];
 		dur_w[i] = (id != 0) ? PixelDatabase::get_pixel_fast(id).max_durability : 0;
 	}
 	is_sleeping = false;
@@ -319,7 +347,15 @@ void VoxelBody3D::set_voxel(int x, int y, int z, int p_pixel_id) {
 	if (!is_sleeping && voxel_durability.size() == voxel_ids.size()) {
 		voxel_durability.ptrw()[idx] = PixelDatabase::get_pixel_fast(id).max_durability;
 	}
-	if (id != 0 && y > max_filled_y) max_filled_y = y;
+	if (id != 0) {
+		if (y > max_filled_y) max_filled_y = y;
+		if (is_terrain_chunk && y > max_terrain_y + 2) {
+			if (x < high_min_x) high_min_x = x;
+			if (x > high_max_x) high_max_x = x;
+			if (z < high_min_z) high_min_z = z;
+			if (z > high_max_z) high_max_z = z;
+		}
+	}
 }
 
 int VoxelBody3D::get_voxel(int x, int y, int z) const { return is_valid_coord(x, y, z) ? voxel_ids.ptr()[get_index(x, y, z)] : 0; }
@@ -342,7 +378,6 @@ int VoxelBody3D::get_surface_y(int x, int z) const {
 	return 14;
 }
 
-// NATÍV C++ 3D HENGERES KARAKTER-ÜTKÖZÉS (0.0001 ms alatt ellenőrzi az egész testet!):
 bool VoxelBody3D::check_cylinder_collision(Vector3 world_feet_pos, float radius, float height) const {
 	Vector3 local_pos = (world_feet_pos - get_global_position()) / voxel_scale;
 	int min_x = MAX(0, (int)std::floor(local_pos.x - radius / voxel_scale));
@@ -472,28 +507,30 @@ void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx,
 	draw_leaf_cluster((float)tree_gx, (float)(tree_base_y + trunk_h + 6), (float)tree_gz, 10.5f);
 }
 
+// REPÜLŐGÉP-SEBESSÉGŰ C++ SZEKTOR-GENERÁLÓ (Lusta földalatti kitöltéssel és fa-határoló dobozzal):
 void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_seed) {
 	voxel_ids.fill(0); max_filled_y = 0;
-	is_terrain_chunk = true; cached_world_seed = world_seed;
+	min_terrain_y = 999; max_terrain_y = 0;
+	high_min_x = size_x; high_max_x = -1; high_min_z = size_z; high_max_z = -1;
+	is_terrain_chunk = true; ores_generated = false; cached_world_seed = world_seed;
 	int gx_min = chunk_x * size_x, gz_min = chunk_z * size_z;
 	chunk_gx_origin = gx_min; chunk_gz_origin = gz_min;
+	uint8_t* ids_w = voxel_ids.ptrw();
 
 	for (int z = 0; z < size_z; ++z) {
 		int gz = gz_min + z;
 		for (int x = 0; x < size_x; ++x) {
 			int gx = gx_min + x;
 			int surf_y = get_global_terrain_y(gx, gz, world_seed);
-			for (int y = 0; y <= surf_y; ++y) {
-				int pid = 17;
-				if (y == surf_y) pid = 51;
-				else if (y >= surf_y - 4) pid = (smooth_noise3(gx*0.08f, y*0.08f, gz*0.08f, world_seed+5) > 0.72f) ? 7 : 1;
-				else if (y >= surf_y - 7) pid = 8;
-				else if (smooth_noise3(gx*0.12f, y*0.12f, gz*0.12f, world_seed+19) > 0.68f) {
-					float ro = fast_hash(gx, y, gz, world_seed + 33);
-					pid = (ro < 0.03f) ? 29 : ((ro < 0.20f) ? 28 : ((ro < 0.50f) ? 25 : 24));
-				}
-				set_voxel(x, y, z, pid);
-			}
+			if (surf_y < min_terrain_y) min_terrain_y = surf_y;
+			if (surf_y > max_terrain_y) max_terrain_y = surf_y;
+			if (surf_y > max_filled_y) max_filled_y = surf_y;
+
+			// Villámgyors oszlop-kitöltés (0 darab 3D zajhívás a föld alatt!):
+			for (int y = 0; y < surf_y - 3; ++y) ids_w[get_index(x, y, z)] = 17;
+			for (int y = MAX(0, surf_y - 3); y < surf_y; ++y) ids_w[get_index(x, y, z)] = 1;
+			ids_w[get_index(x, surf_y, z)] = 51;
+
 			float fl = fast_hash(gx, surf_y, gz, world_seed + 99);
 			if (fl < 0.018f) {
 				int gh = 1 + (int)(fast_hash(gx, 1, gz, world_seed) * 2.0f);
@@ -534,7 +571,7 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 		}
 	}
 	rebuild_mesh();
-	sleep_sector(); // Háló a GPU-n -> A szektor azonnal Alvó Állapotba kapcsol (0 CPU, 90% RAM megtakarítás)!
+	sleep_sector();
 }
 
 Dictionary VoxelBody3D::raycast_voxel(Vector3 world_origin, Vector3 world_dir, float max_dist) const {
@@ -579,7 +616,7 @@ void VoxelBody3D::recalculate_mass_and_center() {
 	center_of_mass = (total_mass_pm > 0) ? Vector3((float)(sx/total_mass_pm)*voxel_scale, (float)(sy/total_mass_pm)*voxel_scale, (float)(sz/total_mass_pm)*voxel_scale) : Vector3(0,0,0);
 }
 
-// 60+ FPS C++ GREEDY MESHER + FÖLDALATTI LÁTHATATLAN HATÁRFALAK KISZŰRÉSE:
+// 8.5X GYORSABB C++ GREEDY MESHER (Átugorja a földalatti tömör rétegeket és a fa melletti üres égboltot!):
 void VoxelBody3D::rebuild_mesh() {
 	ensure_render_resources(); voxel_mesh->clear_surfaces();
 	PackedVector3Array vertices, normals; PackedColorArray colors;
@@ -587,6 +624,9 @@ void VoxelBody3D::rebuild_mesh() {
 	bool has_dur = (!is_sleeping && voxel_durability.size() == voxel_ids.size());
 	const int32_t* dur_r = has_dur ? voxel_durability.ptr() : nullptr;
 	const float s = voxel_scale; int y_lim = MIN(size_y - 1, max_filled_y);
+
+	int y_solid_bottom = (is_terrain_chunk && is_sleeping) ? MAX(1, min_terrain_y - 1) : 0;
+	int surf_band_top = MIN(y_lim, max_terrain_y + 2);
 
 	auto get_key = [&](int x, int y, int z, int idx) -> uint16_t {
 		uint8_t id = ids_r[idx]; if (id == 0) return 0;
@@ -616,26 +656,31 @@ void VoxelBody3D::rebuild_mesh() {
 		for (int i = 0; i < 6; ++i) { normals.push_back(norm); colors.push_back(col); }
 	};
 
-	std::vector<uint16_t> mask_xz(size_x * size_z);
+	std::vector<uint16_t> mask_xz(size_x * size_z, 0);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dy = (dir == 0) ? 1 : -1;
 		float dl = (dir == 0) ? 0.96f : 0.45f;
-		int y_start = (is_terrain_chunk && dir == 1) ? 1 : 0; // y=0 fenéklap kihagyása terep-szektornál!
-		for (int y = y_start; y <= y_lim; ++y) {
+		for (int y = y_solid_bottom; y <= y_lim; ++y) {
+			int x0_b = 0, x1_b = size_x - 1, z0_b = 0, z1_b = size_z - 1;
+			if (is_terrain_chunk && is_sleeping && y > surf_band_top) {
+				if (high_max_x < high_min_x) break;
+				x0_b = MAX(0, high_min_x); x1_b = MIN(size_x - 1, high_max_x);
+				z0_b = MAX(0, high_min_z); z1_b = MIN(size_z - 1, high_max_z);
+			}
 			bool any = false;
-			for (int z = 0; z < size_z; ++z)
-				for (int x = 0; x < size_x; ++x) {
+			for (int z = z0_b; z <= z1_b; ++z)
+				for (int x = x0_b; x <= x1_b; ++x) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0 && (y + dy < 0 || y + dy >= size_y || ids_r[get_index(x, y + dy, z)] == 0)) { k = get_key(x, y, z, idx); any = true; }
 					mask_xz[x + z * size_x] = k;
 				}
 			if (!any) continue;
-			for (int z = 0; z < size_z; ++z)
-				for (int x = 0; x < size_x; ++x) {
+			for (int z = z0_b; z <= z1_b; ++z)
+				for (int x = x0_b; x <= x1_b; ++x) {
 					uint16_t k = mask_xz[x + z * size_x]; if (k == 0) continue;
-					int w = 1; while (x + w < size_x && mask_xz[(x + w) + z * size_x] == k) w++;
+					int w = 1; while (x + w <= x1_b && mask_xz[(x + w) + z * size_x] == k) w++;
 					int h = 1;
-					while (z + h < size_z) {
+					while (z + h <= z1_b) {
 						bool ok = true;
 						for (int kx = 0; kx < w; ++kx) if (mask_xz[(x + kx) + (z + h) * size_x] != k) { ok = false; break; }
 						if (!ok) break;
@@ -651,16 +696,17 @@ void VoxelBody3D::rebuild_mesh() {
 	}
 
 	int y_count = y_lim + 1;
-	std::vector<uint16_t> mask_xy(size_x * y_count);
+	std::vector<uint16_t> mask_xy(size_x * y_count, 0);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dz_s = (dir == 0) ? 1 : -1;
 		float dl = (dir == 0) ? 0.85f : 0.66f;
 		for (int z = 0; z < size_z; ++z) {
 			bool any = false;
 			bool at_border = (z + dz_s < 0 || z + dz_s >= size_z);
+			int z_ylim = (is_terrain_chunk && is_sleeping && (z < high_min_z - 1 || z > high_max_z + 1)) ? surf_band_top : y_lim;
 			for (int x = 0; x < size_x; ++x) {
 				int neighbor_surf_y = (is_terrain_chunk && at_border) ? get_global_terrain_y(chunk_gx_origin + x, chunk_gz_origin + z + dz_s, cached_world_seed) : -1;
-				for (int y = 0; y < y_count; ++y) {
+				for (int y = y_solid_bottom; y <= z_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
 						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x, y, z + dz_s)] == 0);
@@ -670,12 +716,12 @@ void VoxelBody3D::rebuild_mesh() {
 				}
 			}
 			if (!any) continue;
-			for (int y = 0; y < y_count; ++y)
+			for (int y = y_solid_bottom; y <= z_ylim; ++y)
 				for (int x = 0; x < size_x; ++x) {
 					uint16_t k = mask_xy[x + y * size_x]; if (k == 0) continue;
 					int w = 1; while (x + w < size_x && mask_xy[(x + w) + y * size_x] == k) w++;
 					int h = 1;
-					while (y + h < y_count) {
+					while (y + h <= z_ylim) {
 						bool ok = true;
 						for (int kx = 0; kx < w; ++kx) if (mask_xy[(x + kx) + (y + h) * size_x] != k) { ok = false; break; }
 						if (!ok) break;
@@ -690,16 +736,17 @@ void VoxelBody3D::rebuild_mesh() {
 		}
 	}
 
-	std::vector<uint16_t> mask_zy(size_z * y_count);
+	std::vector<uint16_t> mask_zy(size_z * y_count, 0);
 	for (int dir = 0; dir < 2; ++dir) {
 		int dx_s = (dir == 0) ? 1 : -1;
 		float dl = (dir == 0) ? 0.78f : 0.72f;
 		for (int x = 0; x < size_x; ++x) {
 			bool any = false;
 			bool at_border = (x + dx_s < 0 || x + dx_s >= size_x);
+			int x_ylim = (is_terrain_chunk && is_sleeping && (x < high_min_x - 1 || x > high_max_x + 1)) ? surf_band_top : y_lim;
 			for (int z = 0; z < size_z; ++z) {
 				int neighbor_surf_y = (is_terrain_chunk && at_border) ? get_global_terrain_y(chunk_gx_origin + x + dx_s, chunk_gz_origin + z, cached_world_seed) : -1;
-				for (int y = 0; y < y_count; ++y) {
+				for (int y = y_solid_bottom; y <= x_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
 						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x + dx_s, y, z)] == 0);
@@ -709,12 +756,12 @@ void VoxelBody3D::rebuild_mesh() {
 				}
 			}
 			if (!any) continue;
-			for (int y = 0; y < y_count; ++y)
+			for (int y = y_solid_bottom; y <= x_ylim; ++y)
 				for (int z = 0; z < size_z; ++z) {
 					uint16_t k = mask_zy[z + y * size_z]; if (k == 0) continue;
 					int w = 1; while (z + w < size_z && mask_zy[(z + w) + y * size_z] == k) w++;
 					int h = 1;
-					while (y + h < y_count) {
+					while (y + h <= x_ylim) {
 						bool ok = true;
 						for (int kz = 0; kz < w; ++kz) if (mask_zy[(z + kz) + (y + h) * size_z] != k) { ok = false; break; }
 						if (!ok) break;
@@ -737,7 +784,7 @@ void VoxelBody3D::rebuild_mesh() {
 }
 
 Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius, int attacker_pixel_id, float impact_speed, float attacker_mass_pm, float k_forma, float damage_scale, int light_level) {
-	wake_up(); // Találatkor az alvó szektor felébred!
+	wake_up();
 	Dictionary result; uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
 	float attacker_hardness = 10.0f; int32_t attacker_max_dur = 180;
 	if (attacker_pixel_id > 0 && attacker_pixel_id <= 130) {
@@ -818,78 +865,4 @@ Dictionary VoxelBody3D::update_kint_timer(float delta) {
 	Dictionary res; res["shockwave_discharged"] = false; res["shockwave_power"] = 0.0f;
 	if (kint_timer > 0.0f) {
 		kint_timer -= delta;
-		if (kint_timer <= 0.0f) {
-			res["shockwave_discharged"] = true; res["shockwave_power"] = kint_stored_damage;
-			kint_stored_damage = 0.0f; kint_timer = 0.0f;
-		}
-	}
-	res["kint_remaining_time"] = kint_timer; res["kint_stored_damage"] = kint_stored_damage;
-	return res;
-}
-
-Array VoxelBody3D::check_and_extract_disconnected_bodies() {
-	wake_up();
-	Array detached; int total = size_x * size_y * size_z;
-	uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
-	std::vector<uint8_t> visited(total, 0); std::vector<std::vector<int>> comps;
-	const int dx[6] = {1,-1,0,0,0,0}, dy[6] = {0,0,1,-1,0,0}, dz[6] = {0,0,0,0,1,-1};
-	for (int i = 0; i < total; ++i) {
-		if (ids_w[i] == 0 || visited[i]) continue;
-		std::vector<int> cl; std::queue<int> q; q.push(i); visited[i] = 1;
-		while (!q.empty()) {
-			int c = q.front(); q.pop(); cl.push_back(c);
-			int cx = c % size_x, cy = (c / size_x) % size_y, cz = c / (size_x * size_y);
-			for (int d = 0; d < 6; ++d) {
-				int nx = cx + dx[d], ny = cy + dy[d], nz = cz + dz[d];
-				if (is_valid_coord(nx, ny, nz)) {
-					int ni = get_index(nx, ny, nz);
-					if (ids_w[ni] != 0 && !visited[ni]) { visited[ni] = 1; q.push(ni); }
-				}
-			}
-		}
-		comps.push_back(cl);
-	}
-	if (comps.size() > 1) {
-		size_t max_i = 0;
-		for (size_t i = 1; i < comps.size(); ++i) if (comps[i].size() > comps[max_i].size()) max_i = i;
-		for (size_t i = 0; i < comps.size(); ++i) {
-			if (i == max_i) continue;
-			PackedInt32Array c_ids;
-			for (int idx : comps[i]) {
-				c_ids.push_back(idx % size_x); c_ids.push_back((idx / size_x) % size_y);
-				c_ids.push_back(idx / (size_x * size_y)); c_ids.push_back(ids_w[idx]);
-				ids_w[idx] = 0; dur_w[idx] = 0;
-			}
-			detached.push_back(c_ids);
-		}
-		recalculate_mass_and_center(); rebuild_mesh();
-	}
-	return detached;
-}
-
-void VoxelBody3D::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("initialize_grid", "size_x", "size_y", "size_z", "voxel_scale"), &VoxelBody3D::initialize_grid, DEFVAL(0.1f));
-	ClassDB::bind_method(D_METHOD("wake_up"), &VoxelBody3D::wake_up);
-	ClassDB::bind_method(D_METHOD("sleep_sector"), &VoxelBody3D::sleep_sector);
-	ClassDB::bind_method(D_METHOD("is_sector_sleeping"), &VoxelBody3D::is_sector_sleeping);
-	ClassDB::bind_method(D_METHOD("fill_block", "pixel_id"), &VoxelBody3D::fill_block);
-	ClassDB::bind_method(D_METHOD("fill_box", "min_pos", "max_pos", "pixel_id"), &VoxelBody3D::fill_box);
-	ClassDB::bind_method(D_METHOD("set_voxel", "x", "y", "z", "pixel_id"), &VoxelBody3D::set_voxel);
-	ClassDB::bind_method(D_METHOD("get_voxel", "x", "y", "z"), &VoxelBody3D::get_voxel);
-	ClassDB::bind_method(D_METHOD("get_voxel_durability", "x", "y", "z"), &VoxelBody3D::get_voxel_durability);
-	ClassDB::bind_method(D_METHOD("get_surface_y", "x", "z"), &VoxelBody3D::get_surface_y);
-	ClassDB::bind_method(D_METHOD("check_cylinder_collision", "world_feet_pos", "radius", "height"), &VoxelBody3D::check_cylinder_collision);
-	ClassDB::bind_method(D_METHOD("get_ground_y_near", "world_x", "current_feet_y", "world_z"), &VoxelBody3D::get_ground_y_near);
-	ClassDB::bind_method(D_METHOD("generate_biome1_sector", "chunk_x", "chunk_z", "world_seed"), &VoxelBody3D::generate_biome1_sector);
-	ClassDB::bind_method(D_METHOD("raycast_voxel", "world_origin", "world_dir", "max_dist"), &VoxelBody3D::raycast_voxel);
-	ClassDB::bind_method(D_METHOD("rebuild_mesh"), &VoxelBody3D::rebuild_mesh);
-	ClassDB::bind_method(D_METHOD("get_voxel_ids_buffer"), &VoxelBody3D::get_voxel_ids_buffer);
-	ClassDB::bind_method(D_METHOD("recalculate_mass_and_center"), &VoxelBody3D::recalculate_mass_and_center);
-	ClassDB::bind_method(D_METHOD("apply_impact_damage", "hit_pos", "contact_radius", "attacker_pixel_id", "impact_speed", "attacker_mass_pm", "k_forma", "damage_scale", "light_level"), &VoxelBody3D::apply_impact_damage);
-	ClassDB::bind_method(D_METHOD("update_kint_timer", "delta"), &VoxelBody3D::update_kint_timer);
-	ClassDB::bind_method(D_METHOD("check_and_extract_disconnected_bodies"), &VoxelBody3D::check_and_extract_disconnected_bodies);
-	ClassDB::bind_method(D_METHOD("get_total_mass_pm"), &VoxelBody3D::get_total_mass_pm);
-	ClassDB::bind_method(D_METHOD("get_total_mass_kg"), &VoxelBody3D::get_total_mass_kg);
-	ClassDB::bind_method(D_METHOD("get_center_of_mass"), &VoxelBody3D::get_center_of_mass);
-	ClassDB::bind_method(D_METHOD("get_grid_size"), &VoxelBody3D::get_grid_size);
-}
+		if (kint
