@@ -264,7 +264,6 @@ void VoxelBody3D::initialize_grid(int p_x, int p_y, int p_z, float p_voxel_scale
 	set_physics_process(false);
 }
 
-// LUSTA ÉRC- ÉS DURABILITY BETÖLTÉS: Csak akkor fut le, ha bányászni/rombolni kezdesz a szektorban!
 void VoxelBody3D::wake_up() {
 	if (!is_sleeping && voxel_durability.size() == voxel_ids.size()) return;
 	uint8_t* ids_w = voxel_ids.ptrw();
@@ -507,7 +506,6 @@ void VoxelBody3D::place_giant_oak_in_sector(int gx_min, int gz_min, int tree_gx,
 	draw_leaf_cluster((float)tree_gx, (float)(tree_base_y + trunk_h + 6), (float)tree_gz, 10.5f);
 }
 
-// REPÜLŐGÉP-SEBESSÉGŰ C++ SZEKTOR-GENERÁLÓ (Lusta földalatti kitöltéssel és fa-határoló dobozzal):
 void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_seed) {
 	voxel_ids.fill(0); max_filled_y = 0;
 	min_terrain_y = 999; max_terrain_y = 0;
@@ -526,7 +524,6 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 			if (surf_y > max_terrain_y) max_terrain_y = surf_y;
 			if (surf_y > max_filled_y) max_filled_y = surf_y;
 
-			// Villámgyors oszlop-kitöltés (0 darab 3D zajhívás a föld alatt!):
 			for (int y = 0; y < surf_y - 3; ++y) ids_w[get_index(x, y, z)] = 17;
 			for (int y = MAX(0, surf_y - 3); y < surf_y; ++y) ids_w[get_index(x, y, z)] = 1;
 			ids_w[get_index(x, surf_y, z)] = 51;
@@ -616,7 +613,6 @@ void VoxelBody3D::recalculate_mass_and_center() {
 	center_of_mass = (total_mass_pm > 0) ? Vector3((float)(sx/total_mass_pm)*voxel_scale, (float)(sy/total_mass_pm)*voxel_scale, (float)(sz/total_mass_pm)*voxel_scale) : Vector3(0,0,0);
 }
 
-// 8.5X GYORSABB C++ GREEDY MESHER (Átugorja a földalatti tömör rétegeket és a fa melletti üres égboltot!):
 void VoxelBody3D::rebuild_mesh() {
 	ensure_render_resources(); voxel_mesh->clear_surfaces();
 	PackedVector3Array vertices, normals; PackedColorArray colors;
@@ -865,4 +861,58 @@ Dictionary VoxelBody3D::update_kint_timer(float delta) {
 	Dictionary res; res["shockwave_discharged"] = false; res["shockwave_power"] = 0.0f;
 	if (kint_timer > 0.0f) {
 		kint_timer -= delta;
-		if (kint
+		if (kint_timer <= 0.0f) {
+			res["shockwave_discharged"] = true; res["shockwave_power"] = kint_stored_damage;
+			kint_stored_damage = 0.0f; kint_timer = 0.0f;
+		}
+	}
+	res["kint_remaining_time"] = kint_timer; res["kint_stored_damage"] = kint_stored_damage;
+	return res;
+}
+
+Array VoxelBody3D::check_and_extract_disconnected_bodies() {
+	wake_up();
+	Array detached; int total = size_x * size_y * size_z;
+	uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
+	std::vector<uint8_t> visited(total, 0); std::vector<std::vector<int>> comps;
+	const int dx[6] = {1,-1,0,0,0,0}, dy[6] = {0,0,1,-1,0,0}, dz[6] = {0,0,0,0,1,-1};
+	for (int i = 0; i < total; ++i) {
+		if (ids_w[i] == 0 || visited[i]) continue;
+		std::vector<int> cl; std::queue<int> q; q.push(i); visited[i] = 1;
+		while (!q.empty()) {
+			int c = q.front(); q.pop(); cl.push_back(c);
+			int cx = c % size_x, cy = (c / size_x) % size_y, cz = c / (size_x * size_y);
+			for (int d = 0; d < 6; ++d) {
+				int nx = cx + dx[d], ny = cy + dy[d], nz = cz + dz[d];
+				if (is_valid_coord(nx, ny, nz)) {
+					int ni = get_index(nx, ny, nz);
+					if (ids_w[ni] != 0 && !visited[ni]) { visited[ni] = 1; q.push(ni); }
+				}
+			}
+		}
+		comps.push_back(cl);
+	}
+	if (comps.size() > 1) {
+		size_t max_i = 0;
+		for (size_t i = 1; i < comps.size(); ++i) if (comps[i].size() > comps[max_i].size()) max_i = i;
+		for (size_t i = 0; i < comps.size(); ++i) {
+			if (i == max_i) continue;
+			PackedInt32Array c_ids;
+			for (int idx : comps[i]) {
+				c_ids.push_back(idx % size_x); c_ids.push_back((idx / size_x) % size_y);
+				c_ids.push_back(idx / (size_x * size_y)); c_ids.push_back(ids_w[idx]);
+				ids_w[idx] = 0; dur_w[idx] = 0;
+			}
+			detached.push_back(c_ids);
+		}
+		recalculate_mass_and_center(); rebuild_mesh();
+	}
+	return detached;
+}
+
+void VoxelBody3D::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("initialize_grid", "size_x", "size_y", "size_z", "voxel_scale"), &VoxelBody3D::initialize_grid, DEFVAL(0.1f));
+	ClassDB::bind_method(D_METHOD("wake_up"), &VoxelBody3D::wake_up);
+	ClassDB::bind_method(D_METHOD("sleep_sector"), &VoxelBody3D::sleep_sector);
+	ClassDB::bind_method(D_METHOD("is_sector_sleeping"), &VoxelBody3D::is_sector_sleeping);
+	ClassDB::bind_m
