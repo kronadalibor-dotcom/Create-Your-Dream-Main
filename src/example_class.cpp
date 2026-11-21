@@ -2,6 +2,7 @@
 #include <godot_cpp/classes/mesh.hpp>
 #include <godot_cpp/classes/base_material3d.hpp>
 #include <cmath>
+#include <cstdlib>
 #include <queue>
 
 using namespace godot;
@@ -9,8 +10,14 @@ using namespace godot;
 PixelProperties PixelDatabase::pixels[131];
 bool PixelDatabase::initialized = false;
 
-Ref<ArrayMesh> VoxelBody3D::tree_archetype_meshes[100];
-Ref<StandardMaterial3D> VoxelBody3D::shared_voxel_material;
+// 100% Tiszta C++ Memória Fa-Gyorsítótár (Nulla Godot Node, Nulla összeomlás!):
+struct TreeVoxelOffset {
+	int8_t dx;
+	int8_t dy;
+	int8_t dz;
+	uint8_t id;
+};
+static std::vector<TreeVoxelOffset> tree_archetypes[100];
 int VoxelBody3D::built_tree_archetypes_count = 0;
 
 PixelDatabase::PixelDatabase() { init_database(); }
@@ -166,12 +173,11 @@ static inline int floor_div_int(int a, int b) {
 
 VoxelBody3D::VoxelBody3D() {
 	PixelDatabase::init_database();
-	size_x = 64; size_y = 64; size_z = 64; max_filled_y = 0; voxel_scale = 0.1f;
+	size_x = 64; size_y = 128; size_z = 64; max_filled_y = 0; voxel_scale = 0.1f;
 	min_terrain_y = 0; max_terrain_y = 32;
 	high_min_x = 0; high_max_x = -1; high_min_z = 0; high_max_z = -1;
-	chunk_gx_origin = 0; chunk_gz_origin = 0; cached_world_seed = 0; assigned_tree_seed = -1;
+	chunk_gx_origin = 0; chunk_gz_origin = 0; cached_world_seed = 0;
 	is_terrain_chunk = false; is_sleeping = true; ores_generated = false;
-	tree_instance_node = nullptr;
 	is_static_body = true; total_mass_pm = 0; center_of_mass = Vector3(0, 0, 0);
 	kint_stored_damage = 0.0f; kint_timer = 0.0f;
 	set_process(false); set_physics_process(false);
@@ -180,24 +186,28 @@ VoxelBody3D::VoxelBody3D() {
 VoxelBody3D::~VoxelBody3D() {}
 
 void VoxelBody3D::ensure_render_resources() {
-	if (shared_voxel_material.is_null()) {
-		shared_voxel_material.instantiate();
-		shared_voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-		shared_voxel_material->set_roughness(0.82f);
-	}
 	if (voxel_mesh.is_null()) { voxel_mesh.instantiate(); set_mesh(voxel_mesh); }
 	if (voxel_material.is_null()) {
-		voxel_material = shared_voxel_material;
+		voxel_material.instantiate();
+		voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+		voxel_material->set_roughness(0.82f);
 		set_material_override(voxel_material);
 	}
 }
 
-// 100-FÉLE VALÓDI 3D VOXEL TÖLGYFA-SABLON ÉPÍTŐ (Greedy Meshinggel, Gyökerekkel, 3-szintű Faágakkal és Lombbal!):
+// 100% TISZTA C++ MEMÓRIA FA-SABLON ÉPÍTŐ (Godot Node-ok nélkül, 0 összeomlás!):
 void VoxelBody3D::build_single_tree_archetype(int idx) {
-	if (idx < 0 || idx >= 100 || tree_archetype_meshes[idx].is_valid()) return;
-	VoxelBody3D temp_tree;
-	temp_tree.initialize_grid(84, 102, 84, 0.1f);
-	temp_tree.is_terrain_chunk = false;
+	if (idx < 0 || idx >= 100 || !tree_archetypes[idx].empty()) return;
+	const int TX = 84, TY = 102, TZ = 84;
+	std::vector<uint8_t> tg(TX * TY * TZ, 0);
+	auto t_idx = [&](int x, int y, int z) -> int { return x + TX * (y + TY * z); };
+	auto t_set = [&](int x, int y, int z, uint8_t id) {
+		if (x >= 0 && x < TX && y >= 0 && y < TY && z >= 0 && z < TZ) tg[t_idx(x, y, z)] = id;
+	};
+	auto t_get = [&](int x, int y, int z) -> uint8_t {
+		return (x >= 0 && x < TX && y >= 0 && y < TY && z >= 0 && z < TZ) ? tg[t_idx(x, y, z)] : 0;
+	};
+
 	int seed = 1337 + idx * 9173;
 	int tgx = 42, tgz = 42, tby = 4;
 
@@ -209,7 +219,7 @@ void VoxelBody3D::build_single_tree_archetype(int idx) {
 					float d2 = (dx*dx + dy*dy*1.4f + dz*dz) / (rad*rad);
 					int vx = (int)cx + dx, vy = (int)cy + dy, vz = (int)cz + dz;
 					if (d2 <= 1.0f && fast_hash(vx, vy, vz, seed + 77) > (d2 * 0.45f)) {
-						if (temp_tree.get_voxel(vx, vy, vz) == 0) temp_tree.set_voxel(vx, vy, vz, 35);
+						if (t_get(vx, vy, vz) == 0) t_set(vx, vy, vz, 35);
 					}
 				}
 	};
@@ -220,16 +230,16 @@ void VoxelBody3D::build_single_tree_archetype(int idx) {
 		float ang = rot_off + r * (6.2831f / root_cnt) + fast_hash(r, idx, 1, seed) * 0.3f;
 		float dx = std::cos(ang), dz = std::sin(ang);
 		for (int step = 3; step < 15; ++step) {
-			int rx = (int)(tgx + dx * step), rz = (int)(tgz + dz * step), ry = MAX(1, (int)(tby + 2.5f - step * 0.25f)), rad = (step < 8) ? 2 : 1;
+			int rx = (int)(tgx + dx * step), rz = (int)(tgz + dz * step), ry = MAX(0, (int)(tby + 2.5f - step * 0.25f)), rad = (step < 8) ? 2 : 1;
 			for (int oz = -rad; oz <= rad; ++oz)
 				for (int oy = -rad; oy <= rad; ++oy)
 					for (int ox = -rad; ox <= rad; ++ox)
-						if (ox*ox + oy*oy + oz*oz <= rad*rad) temp_tree.set_voxel(rx + ox, ry + oy, rz + oz, 36);
+						if (ox*ox + oy*oy + oz*oz <= rad*rad) t_set(rx + ox, ry + oy, rz + oz, 36);
 		}
 	}
 
-	int trunk_h = 54 + (int)(fast_hash(idx, 3, idx * 7, seed) * 22.0f);
-	float base_r = 5.4f + fast_hash(idx, 5, 2, seed) * 1.4f;
+	int trunk_h = 54 + (int)(fast_hash(idx, 3, idx * 7, seed) * 20.0f);
+	float base_r = 5.5f + fast_hash(idx, 5, 2, seed) * 1.2f;
 	for (int h = 0; h < trunk_h; ++h) {
 		float cx = tgx + std::sin(h * 0.05f + rot_off) * 1.1f, cz = tgz + std::cos(h * 0.05f + rot_off) * 1.1f;
 		int cy = tby + h;
@@ -238,8 +248,8 @@ void VoxelBody3D::build_single_tree_archetype(int idx) {
 		for (int dz = -ir; dz <= ir; ++dz)
 			for (int dx = -ir; dx <= ir; ++dx) {
 				float d = std::sqrt((float)(dx*dx + dz*dz));
-				if (d <= rad - 1.3f) temp_tree.set_voxel((int)cx + dx, cy, (int)cz + dz, 33);
-				else if (d <= rad) temp_tree.set_voxel((int)cx + dx, cy, (int)cz + dz, 34);
+				if (d <= rad - 1.3f) t_set((int)cx + dx, cy, (int)cz + dz, 33);
+				else if (d <= rad) t_set((int)cx + dx, cy, (int)cz + dz, 34);
 			}
 	}
 
@@ -255,26 +265,33 @@ void VoxelBody3D::build_single_tree_archetype(int idx) {
 				for (int oy = -brad; oy <= brad; ++oy)
 					for (int ox = -brad; ox <= brad; ++ox)
 						if (ox*ox + oy*oy + oz*oz <= brad*brad)
-							temp_tree.set_voxel((int)bx + ox, (int)by + oy, (int)bz + oz, (brad == 2 && ox==0 && oy==0 && oz==0) ? 33 : 34);
+							t_set((int)bx + ox, (int)by + oy, (int)bz + oz, (brad == 2 && ox==0 && oy==0 && oz==0) ? 33 : 34);
 			if (step == 10 || step == b_len - 4) {
 				for (int side = -1; side <= 1; side += 2) {
 					float sang = ang + side * 0.75f, sx = bx, sy = by, sz = bz;
 					for (int ss = 1; ss <= 9; ++ss) {
 						sx += std::cos(sang); sz += std::sin(sang); sy += 0.25f;
-						temp_tree.set_voxel((int)sx, (int)sy, (int)sz, 33);
-						temp_tree.set_voxel((int)sx, (int)sy + 1, (int)sz, 34);
+						t_set((int)sx, (int)sy, (int)sz, 33);
+						t_set((int)sx, (int)sy + 1, (int)sz, 34);
 					}
 					draw_leaf(sx, sy + 2.0f, sz, 6.2f);
 				}
 			}
 		}
 		draw_leaf(bx, by + 2.5f, bz, 7.8f);
-		temp_tree.set_voxel((int)bx, (int)by - 2, (int)bz, 37);
-		temp_tree.set_voxel((int)bx, (int)by - 3, (int)bz, 38);
+		t_set((int)bx, (int)by - 2, (int)bz, 37);
+		t_set((int)bx, (int)by - 3, (int)bz, 38);
 	}
 	draw_leaf((float)tgx, (float)(tby + trunk_h + 5), (float)tgz, 10.2f);
-	temp_tree.rebuild_mesh();
-	tree_archetype_meshes[idx] = temp_tree.voxel_mesh;
+
+	std::vector<TreeVoxelOffset>& out = tree_archetypes[idx];
+	out.reserve(5000);
+	for (int z = 0; z < TZ; ++z)
+		for (int y = 0; y < TY; ++y)
+			for (int x = 0; x < TX; ++x) {
+				uint8_t id = tg[t_idx(x, y, z)];
+				if (id != 0) out.push_back({(int8_t)(x - tgx), (int8_t)(y - tby), (int8_t)(z - tgz), id});
+			}
 }
 
 int VoxelBody3D::build_next_tree_archetype() {
@@ -284,11 +301,17 @@ int VoxelBody3D::build_next_tree_archetype() {
 	return built_tree_archetypes_count;
 }
 
-void VoxelBody3D::refresh_tree_archetype_mesh() {
-	if (tree_instance_node != nullptr && assigned_tree_seed >= 0 && built_tree_archetypes_count > 0) {
-		int arch_id = assigned_tree_seed % built_tree_archetypes_count;
-		if (tree_archetype_meshes[arch_id].is_valid()) {
-			tree_instance_node->set_mesh(tree_archetype_meshes[arch_id]);
+void VoxelBody3D::stamp_cached_tree_in_sector(int gx_min, int gz_min, int tree_gx, int tree_gz, int tree_base_y, int arch_id) {
+	if (tree_gx + 42 < gx_min || tree_gx - 42 >= gx_min + size_x || tree_gz + 42 < gz_min || tree_gz - 42 >= gz_min + size_z) return;
+	const std::vector<TreeVoxelOffset>& tv = tree_archetypes[arch_id];
+	for (size_t i = 0; i < tv.size(); ++i) {
+		const TreeVoxelOffset& v = tv[i];
+		int lx = (tree_gx + v.dx) - gx_min;
+		int lz = (tree_gz + v.dz) - gz_min;
+		int ly = tree_base_y + v.dy;
+		if (lx >= 0 && lx < size_x && lz >= 0 && lz < size_z && ly >= 0 && ly < size_y) {
+			if (v.id == 35 && get_voxel(lx, ly, lz) != 0) continue;
+			set_voxel(lx, ly, lz, v.id);
 		}
 	}
 }
@@ -445,9 +468,8 @@ float VoxelBody3D::get_ground_y_near(float world_x, float current_feet_y, float 
 	return (float)(get_surface_y(lx, lz) + 1) * voxel_scale;
 }
 
-// 20X GYORSABB SZEKTOR-GENERÁLÁS (A 100-féle előre felépített Voxel Tölgyfa-Sablonnal + Ütköző Törzzsel!):
 void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_seed) {
-	ensure_render_resources();
+	if (size_y < 128) initialize_grid(size_x, 128, size_z, voxel_scale);
 	while (built_tree_archetypes_count < 16) {
 		build_next_tree_archetype();
 	}
@@ -489,29 +511,8 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 				int tgz = tcz * CELL + 28 + (int)(fast_hash(tcx, 37, tcz, world_seed) * 48.0f);
 				if (tcx == 0 && tcz == 0) { tgx = 42; tgz = 42; }
 				int tby = get_global_terrain_y(tgx, tgz, world_seed);
-
-				// Ha a fa törzse ebbe a szektorba esik: 0.001 ms alatt rátesszük a 100-as Voxel-Fa Gyorsítótárból!
-				if (tgx >= gx_min && tgx < gx_min + size_x && tgz >= gz_min && tgz < gz_min + size_z) {
-					assigned_tree_seed = abs(tcx * 73856093 ^ tcz * 19349663);
-					int arch_id = assigned_tree_seed % built_tree_archetypes_count;
-					if (tree_instance_node == nullptr) {
-						tree_instance_node = memnew(MeshInstance3D);
-						tree_instance_node->set_material_override(shared_voxel_material);
-						add_child(tree_instance_node);
-					}
-					tree_instance_node->set_mesh(tree_archetype_meshes[arch_id]);
-					tree_instance_node->set_position(Vector3((float)(tgx - gx_min - 42) * voxel_scale, (float)(tby - 4) * voxel_scale, (float)(tgz - gz_min - 42) * voxel_scale));
-
-					// A fatörzs alsó 22 pixelét beírjuk a voxel_ids-be is a 100%-os 3D karakter-ütközéshez (de nem kell újra-meshelni!):
-					int lx_c = tgx - gx_min, lz_c = tgz - gz_min;
-					for (int h = 0; h < 22; ++h) {
-						int cy = tby + h; if (cy >= size_y) break;
-						for (int dz = -6; dz <= 6; ++dz)
-							for (int dx = -6; dx <= 6; ++dx)
-								if (dx*dx + dz*dz <= 34 && is_valid_coord(lx_c + dx, cy, lz_c + dz))
-									ids_w[get_index(lx_c + dx, cy, lz_c + dz)] = 34;
-					}
-				}
+				int arch_id = std::abs((tcx * 73856093) ^ (tcz * 19349663)) % MAX(1, built_tree_archetypes_count);
+				stamp_cached_tree_in_sector(gx_min, gz_min, tgx, tgz, tby, arch_id);
 			}
 			if (fast_hash(tcx, 59, tcz, world_seed) < 0.42f) {
 				int rgx = tcx * CELL + 12 + (int)(fast_hash(tcx, 61, tcz, world_seed) * 14.0f);
@@ -527,9 +528,7 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 			}
 		}
 	}
-	rebuild_mesh();
-	if (max_filled_y < max_terrain_y + 22) max_filled_y = MIN(size_y - 1, max_terrain_y + 22);
-	sleep_sector();
+	rebuild_mesh(); sleep_sector();
 }
 
 Dictionary VoxelBody3D::raycast_voxel(Vector3 world_origin, Vector3 world_dir, float max_dist) const {
@@ -585,7 +584,7 @@ void VoxelBody3D::rebuild_mesh() {
 	int surf_band_top = MIN(y_lim, max_terrain_y + 2);
 
 	auto get_key = [&](int x, int y, int z, int idx) -> uint16_t {
-		uint8_t id = ids_r[idx]; if (id == 0 || (is_terrain_chunk && id == 34)) return 0;
+		uint8_t id = ids_r[idx]; if (id == 0) return 0;
 		int hp_b = 4;
 		if (has_dur) {
 			int32_t md = PixelDatabase::get_pixel_fast(id).max_durability;
@@ -622,7 +621,7 @@ void VoxelBody3D::rebuild_mesh() {
 			for (int z = z0_b; z <= z1_b; ++z)
 				for (int x = x0_b; x <= x1_b; ++x) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
-					if (ids_r[idx] != 0 && (y + dy < 0 || y + dy >= size_y || ids_r[get_index(x, y + dy, z)] == 0)) { k = get_key(x, y, z, idx); if (k != 0) any = true; }
+					if (ids_r[idx] != 0 && (y + dy < 0 || y + dy >= size_y || ids_r[get_index(x, y + dy, z)] == 0)) { k = get_key(x, y, z, idx); any = true; }
 					mask_xz[x + z * size_x] = k;
 				}
 			if (!any) continue;
@@ -658,8 +657,8 @@ void VoxelBody3D::rebuild_mesh() {
 				for (int y = y_solid_bottom; y <= z_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
-						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x, y, z + dz_s)] == 0 || (is_terrain_chunk && ids_r[get_index(x, y, z + dz_s)] == 34));
-						if (exposed) { k = get_key(x, y, z, idx); if (k != 0) any = true; }
+						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x, y, z + dz_s)] == 0);
+						if (exposed) { k = get_key(x, y, z, idx); any = true; }
 					}
 					mask_xy[x + y * size_x] = k;
 				}
@@ -696,8 +695,8 @@ void VoxelBody3D::rebuild_mesh() {
 				for (int y = y_solid_bottom; y <= x_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
-						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x + dx_s, y, z)] == 0 || (is_terrain_chunk && ids_r[get_index(x + dx_s, y, z)] == 34));
-						if (exposed) { k = get_key(x, y, z, idx); if (k != 0) any = true; }
+						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x + dx_s, y, z)] == 0);
+						if (exposed) { k = get_key(x, y, z, idx); any = true; }
 					}
 					mask_zy[z + y * size_z] = k;
 				}
@@ -870,23 +869,4 @@ void VoxelBody3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_built_tree_archetypes_count"), &VoxelBody3D::get_built_tree_archetypes_count);
 	ClassDB::bind_method(D_METHOD("refresh_tree_archetype_mesh"), &VoxelBody3D::refresh_tree_archetype_mesh);
 	ClassDB::bind_method(D_METHOD("fill_block", "pixel_id"), &VoxelBody3D::fill_block);
-	ClassDB::bind_method(D_METHOD("fill_box", "min_pos", "max_pos", "pixel_id"), &VoxelBody3D::fill_box);
-	ClassDB::bind_method(D_METHOD("set_voxel", "x", "y", "z", "pixel_id"), &VoxelBody3D::set_voxel);
-	ClassDB::bind_method(D_METHOD("get_voxel", "x", "y", "z"), &VoxelBody3D::get_voxel);
-	ClassDB::bind_method(D_METHOD("get_voxel_durability", "x", "y", "z"), &VoxelBody3D::get_voxel_durability);
-	ClassDB::bind_method(D_METHOD("get_surface_y", "x", "z"), &VoxelBody3D::get_surface_y);
-	ClassDB::bind_method(D_METHOD("check_cylinder_collision", "world_feet_pos", "radius", "height"), &VoxelBody3D::check_cylinder_collision);
-	ClassDB::bind_method(D_METHOD("get_ground_y_near", "world_x", "current_feet_y", "world_z"), &VoxelBody3D::get_ground_y_near);
-	ClassDB::bind_method(D_METHOD("generate_biome1_sector", "chunk_x", "chunk_z", "world_seed"), &VoxelBody3D::generate_biome1_sector);
-	ClassDB::bind_method(D_METHOD("raycast_voxel", "world_origin", "world_dir", "max_dist"), &VoxelBody3D::raycast_voxel);
-	ClassDB::bind_method(D_METHOD("rebuild_mesh"), &VoxelBody3D::rebuild_mesh);
-	ClassDB::bind_method(D_METHOD("get_voxel_ids_buffer"), &VoxelBody3D::get_voxel_ids_buffer);
-	ClassDB::bind_method(D_METHOD("recalculate_mass_and_center"), &VoxelBody3D::recalculate_mass_and_center);
-	ClassDB::bind_method(D_METHOD("apply_impact_damage", "hit_pos", "contact_radius", "attacker_pixel_id", "impact_speed", "attacker_mass_pm", "k_forma", "damage_scale", "light_level"), &VoxelBody3D::apply_impact_damage);
-	ClassDB::bind_method(D_METHOD("update_kint_timer", "delta"), &VoxelBody3D::update_kint_timer);
-	ClassDB::bind_method(D_METHOD("check_and_extract_disconnected_bodies"), &VoxelBody3D::check_and_extract_disconnected_bodies);
-	ClassDB::bind_method(D_METHOD("get_total_mass_pm"), &VoxelBody3D::get_total_mass_pm);
-	ClassDB::bind_method(D_METHOD("get_total_mass_kg"), &VoxelBody3D::get_total_mass_kg);
-	ClassDB::bind_method(D_METHOD("get_center_of_mass"), &VoxelBody3D::get_center_of_mass);
-	ClassDB::bind_method(D_METHOD("get_grid_size"), &VoxelBody3D::get_grid_size);
-}
+	ClassDB::bind_
