@@ -70,11 +70,16 @@ private:
 	int size_y;
 	int size_z;
 	int max_filled_y;
+	int min_terrain_y;
+	int max_terrain_y;
+	int high_min_x, high_max_x;
+	int high_min_z, high_max_z;
 	int chunk_gx_origin;
 	int chunk_gz_origin;
 	int cached_world_seed;
 	bool is_terrain_chunk;
 	bool is_sleeping;
+	bool ores_generated;
 	float voxel_scale;
 
 	PackedByteArray voxel_ids;
@@ -122,7 +127,6 @@ public:
 	int get_voxel_durability(int x, int y, int z) const;
 	int get_surface_y(int x, int z) const;
 
-	// Natív C++ 3D Karakter-Ütközés és Talaj-Lekérdezés (50x gyorsabb a GDScriptnél!):
 	bool check_cylinder_collision(Vector3 world_feet_pos, float radius, float height) const;
 	float get_ground_y_near(float world_x, float current_feet_y, float world_z) const;
 
