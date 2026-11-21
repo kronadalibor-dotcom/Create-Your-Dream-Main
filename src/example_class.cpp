@@ -869,4 +869,23 @@ void VoxelBody3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_built_tree_archetypes_count"), &VoxelBody3D::get_built_tree_archetypes_count);
 	ClassDB::bind_method(D_METHOD("refresh_tree_archetype_mesh"), &VoxelBody3D::refresh_tree_archetype_mesh);
 	ClassDB::bind_method(D_METHOD("fill_block", "pixel_id"), &VoxelBody3D::fill_block);
-	ClassDB::bind_
+	ClassDB::bind_method(D_METHOD("fill_box", "min_pos", "max_pos", "pixel_id"), &VoxelBody3D::fill_box);
+	ClassDB::bind_method(D_METHOD("set_voxel", "x", "y", "z", "pixel_id"), &VoxelBody3D::set_voxel);
+	ClassDB::bind_method(D_METHOD("get_voxel", "x", "y", "z"), &VoxelBody3D::get_voxel);
+	ClassDB::bind_method(D_METHOD("get_voxel_durability", "x", "y", "z"), &VoxelBody3D::get_voxel_durability);
+	ClassDB::bind_method(D_METHOD("get_surface_y", "x", "z"), &VoxelBody3D::get_surface_y);
+	ClassDB::bind_method(D_METHOD("check_cylinder_collision", "world_feet_pos", "radius", "height"), &VoxelBody3D::check_cylinder_collision);
+	ClassDB::bind_method(D_METHOD("get_ground_y_near", "world_x", "current_feet_y", "world_z"), &VoxelBody3D::get_ground_y_near);
+	ClassDB::bind_method(D_METHOD("generate_biome1_sector", "chunk_x", "chunk_z", "world_seed"), &VoxelBody3D::generate_biome1_sector);
+	ClassDB::bind_method(D_METHOD("raycast_voxel", "world_origin", "world_dir", "max_dist"), &VoxelBody3D::raycast_voxel);
+	ClassDB::bind_method(D_METHOD("rebuild_mesh"), &VoxelBody3D::rebuild_mesh);
+	ClassDB::bind_method(D_METHOD("get_voxel_ids_buffer"), &VoxelBody3D::get_voxel_ids_buffer);
+	ClassDB::bind_method(D_METHOD("recalculate_mass_and_center"), &VoxelBody3D::recalculate_mass_and_center);
+	ClassDB::bind_method(D_METHOD("apply_impact_damage", "hit_pos", "contact_radius", "attacker_pixel_id", "impact_speed", "attacker_mass_pm", "k_forma", "damage_scale", "light_level"), &VoxelBody3D::apply_impact_damage);
+	ClassDB::bind_method(D_METHOD("update_kint_timer", "delta"), &VoxelBody3D::update_kint_timer);
+	ClassDB::bind_method(D_METHOD("check_and_extract_disconnected_bodies"), &VoxelBody3D::check_and_extract_disconnected_bodies);
+	ClassDB::bind_method(D_METHOD("get_total_mass_pm"), &VoxelBody3D::get_total_mass_pm);
+	ClassDB::bind_method(D_METHOD("get_total_mass_kg"), &VoxelBody3D::get_total_mass_kg);
+	ClassDB::bind_method(D_METHOD("get_center_of_mass"), &VoxelBody3D::get_center_of_mass);
+	ClassDB::bind_method(D_METHOD("get_grid_size"), &VoxelBody3D::get_grid_size);
+}
