@@ -492,7 +492,7 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 
 				// Ha a fa törzse ebbe a szektorba esik: 0.001 ms alatt rátesszük a 100-as Voxel-Fa Gyorsítótárból!
 				if (tgx >= gx_min && tgx < gx_min + size_x && tgz >= gz_min && tgz < gz_min + size_z) {
-					assigned_tree_seed = absi(tcx * 73856093 ^ tcz * 19349663);
+					assigned_tree_seed = abs(tcx * 73856093 ^ tcz * 19349663);
 					int arch_id = assigned_tree_seed % built_tree_archetypes_count;
 					if (tree_instance_node == nullptr) {
 						tree_instance_node = memnew(MeshInstance3D);
