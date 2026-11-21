@@ -66,9 +66,6 @@ class VoxelBody3D : public MeshInstance3D {
 	GDCLASS(VoxelBody3D, MeshInstance3D)
 
 private:
-	// 16 -> 100 Darabos Valódi 3D Voxel Tölgyfa-Sablon Gyorsítótár (Pihenőidőben bővül 100-ig!):
-	static Ref<ArrayMesh> tree_archetype_meshes[100];
-	static Ref<StandardMaterial3D> shared_voxel_material;
 	static int built_tree_archetypes_count;
 
 	int size_x;
@@ -82,13 +79,10 @@ private:
 	int chunk_gx_origin;
 	int chunk_gz_origin;
 	int cached_world_seed;
-	int assigned_tree_seed;
 	bool is_terrain_chunk;
 	bool is_sleeping;
 	bool ores_generated;
 	float voxel_scale;
-
-	MeshInstance3D* tree_instance_node;
 
 	PackedByteArray voxel_ids;
 	PackedInt32Array voxel_durability;
@@ -113,7 +107,8 @@ private:
 	}
 
 	void ensure_render_resources();
-	void build_single_tree_archetype(int archetype_idx);
+	static void build_single_tree_archetype(int archetype_idx);
+	void stamp_cached_tree_in_sector(int gx_min, int gz_min, int tree_gx, int tree_gz, int tree_base_y, int arch_id);
 
 protected:
 	static void _bind_methods();
@@ -127,10 +122,9 @@ public:
 	void sleep_sector();
 	bool is_sector_sleeping() const { return is_sleeping; }
 
-	// Pihenőidőben (Idle-Time) hívható C++ Fa-Gyár (16-tól 100 egyedi voxel-fáig):
 	int build_next_tree_archetype();
 	int get_built_tree_archetypes_count() const { return built_tree_archetypes_count; }
-	void refresh_tree_archetype_mesh();
+	void refresh_tree_archetype_mesh() {}
 
 	void fill_block(int p_pixel_id);
 	void fill_box(Vector3i p_min, Vector3i p_max, int p_pixel_id);
