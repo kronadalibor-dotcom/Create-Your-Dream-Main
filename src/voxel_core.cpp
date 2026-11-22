@@ -366,12 +366,10 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 		const PixelProperties& ap = PixelDatabase::get_pixel_fast((uint8_t)attacker_pixel_id);
 		attacker_hardness = (float)ap.hardness; attacker_max_dur = ap.max_durability;
 		if (attacker_pixel_id == 31) {
-			if (light_level <= 0) attacker_hardness = 50.0f;
-			else if (light_level == 1) attacker_hardness = 100.0f;
-			else if (light_level == 2) attacker_hardness = 500.0f;
-			else attacker_hardness = 650.0f;
+			attacker_hardness = (light_level <= 0) ? 50.0f : ((light_level == 1) ? 100.0f : ((light_level == 2) ? 500.0f : 650.0f));
 		}
 	}
+	bool bare_hand = (attacker_pixel_id == 88 || attacker_pixel_id == 124 || attacker_pixel_id == 126);
 	float m_speed = (impact_speed < 50.0f) ? MAX(0.05f, 1.0f - (50.0f - impact_speed) * 0.02f) : (1.0f + (impact_speed - 50.0f) * 0.005f);
 	float m_mass = 1.0f + attacker_mass_pm * 0.005f;
 	float d_nyers = (attacker_hardness * m_speed * m_mass * damage_scale) + kint_stored_damage;
@@ -386,30 +384,56 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 		return false;
 	};
 
-	std::vector<int> contacted; int r = MAX(0, contact_radius);
-	for (int dz = -r; dz <= r; ++dz)
-		for (int dy = -r; dy <= r; ++dy)
-			for (int dx = -r; dx <= r; ++dx)
-				if (dx*dx + dy*dy + dz*dz <= r*r) {
-					int vx = hit_pos.x + dx, vy = hit_pos.y + dy, vz = hit_pos.z + dz;
-					if (is_valid_coord(vx, vy, vz)) {
-						int idx = get_index(vx, vy, vz);
-						if (ids_w[idx] != 0 && is_exposed_to_air(vx, vy, vz)) contacted.push_back(idx);
-					}
-				}
-	int n_kontakt = MAX(1, (int)contacted.size());
-	float e_pixel = d_nyers / (1.0f + (float)(n_kontakt - 1) * k_forma);
+	int r = MAX(0, contact_radius);
+	int r_shock = r + 2;
+	std::vector<int> layer_vox[4];
+	for (int dz = -r_shock; dz <= r_shock; ++dz)
+		for (int dy = -r_shock; dy <= r_shock; ++dy)
+			for (int dx = -r_shock; dx <= r_shock; ++dx) {
+				int d2 = dx*dx + dy*dy + dz*dz;
+				if (d2 > r_shock * r_shock) continue;
+				int vx = hit_pos.x + dx, vy = hit_pos.y + dy, vz = hit_pos.z + dz;
+				if (!is_valid_coord(vx, vy, vz)) continue;
+				int idx = get_index(vx, vy, vz);
+				if (ids_w[idx] == 0) continue;
+				float dist = std::sqrt((float)d2);
+				int layer = (d2 <= r * r && is_exposed_to_air(vx, vy, vz)) ? 0 : CLAMP((int)std::ceil(dist - (float)r), 1, 3);
+				layer_vox[layer].push_back(idx);
+			}
+
+	int n_kontakt = MAX(1, (int)layer_vox[0].size());
+	float e_base = d_nyers / (1.0f + (float)(n_kontakt - 1) * k_forma);
+	const float shock_atten[4] = {1.0f, 0.42f, 0.16f, 0.05f};
+
 	int destroyed_count = 0, damaged_count = 0; float max_recoil = 0.0f;
 	bool instakill = false, bleeding = false, jap_severed = false;
+	PackedInt32Array dust_events;
+	std::vector<int> frac_indices;
+	std::vector<uint8_t> frac_ids;
 
-	for (size_t i = 0; i < contacted.size(); ++i) {
-		int idx = contacted[i]; uint8_t tid = ids_w[idx];
-		const PixelProperties& tp = PixelDatabase::get_pixel_fast(tid);
-		float hr = (float)tp.hardness / MAX(1.0f, attacker_hardness);
-		float recoil = e_pixel * (hr * hr);
-		if (recoil > max_recoil) max_recoil = recoil;
-		if (e_pixel > (float)tp.ak_threshold) {
-			dur_w[idx] -= (int32_t)std::round(e_pixel - (float)tp.ak_threshold);
+	for (int L = 0; L < 4; ++L) {
+		float e_layer = e_base * shock_atten[L];
+		if (e_layer < 0.5f) break;
+		for (size_t i = 0; i < layer_vox[L].size(); ++i) {
+			int idx = layer_vox[L][i]; uint8_t tid = ids_w[idx];
+			if (tid == 0) continue;
+			const PixelProperties& tp = PixelDatabase::get_pixel_fast(tid);
+			float eff_ak = (float)tp.ak_threshold;
+			if (bare_hand) {
+				if (tid == 33 || tid == 17 || (tid >= 24 && tid <= 31)) eff_ak = 999999.0f;
+				else if (tid == 34 || tid == 36) eff_ak = MIN(eff_ak, e_base * 0.28f);
+			}
+			if (L == 0) {
+				float hr = (float)tp.hardness / MAX(1.0f, attacker_hardness);
+				float recoil = e_layer * (hr * hr);
+				if (recoil > max_recoil) max_recoil = recoil;
+			}
+			float net_dmg = e_layer - eff_ak;
+			if (net_dmg <= 0.0f) continue;
+
+			int32_t dmg_int = (int32_t)std::round(net_dmg);
+			if (bare_hand && tid == 34 && L == 0) dmg_int = MAX(dmg_int, dur_w[idx]);
+			dur_w[idx] -= dmg_int;
 			damaged_count++;
 			if (dur_w[idx] <= 0) {
 				if (attacker_pixel_id == 29 && tp.max_durability < attacker_max_dur) {
@@ -419,21 +443,45 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 				if (tid == 68 || tid == 69) instakill = true;
 				if (tid == 76) bleeding = true;
 				if (tid == 94) jap_severed = true;
+
+				int vx = idx % size_x, vy = (idx / size_x) % size_y, vz = idx / (size_x * size_y);
+				bool is_fracturable = (tid == 34 || tid == 33 || tid == 36 || tid == 17 || tid == 8 || tid == 56 || tid == 90 || (tid >= 24 && tid <= 31));
+				int h_val = (vx * 73856093 ^ vy * 19349663 ^ vz * 83492791) & 7;
+				if (!is_fracturable || h_val <= 1) {
+					dust_events.push_back(vx); dust_events.push_back(vy); dust_events.push_back(vz); dust_events.push_back(tid);
+				} else {
+					frac_indices.push_back(idx); frac_ids.push_back(tid);
+				}
 				ids_w[idx] = 0; dur_w[idx] = 0; destroyed_count++;
 				s_last_destroyed.push_back(idx);
 			}
 		}
 	}
+
+	Array fragment_clusters;
+	if (!frac_indices.empty()) {
+		int num_groups = CLAMP((int)frac_indices.size() / 4 + 1, 1, 3);
+		std::vector<PackedInt32Array> groups(num_groups);
+		for (size_t i = 0; i < frac_indices.size(); ++i) {
+			int idx = frac_indices[i];
+			int vx = idx % size_x, vy = (idx / size_x) % size_y, vz = idx / (size_x * size_y);
+			int g = ((vx / 2) + (vy / 2) + (vz / 2)) % num_groups;
+			groups[g].push_back(vx); groups[g].push_back(vy); groups[g].push_back(vz); groups[g].push_back(frac_ids[i]);
+		}
+		for (int g = 0; g < num_groups; ++g) if (groups[g].size() > 0) fragment_clusters.push_back(groups[g]);
+	}
+
 	float kb = (total_mass_pm > 0) ? ((d_nyers * (1.0f + (float)n_kontakt * 0.02f)) / (float)total_mass_pm) : 0.0f;
 	if (damaged_count > 0 || destroyed_count > 0) {
 		if (destroyed_count > 0) recalculate_mass_and_center();
 		rebuild_mesh();
 	}
-	result["d_nyers"] = d_nyers; result["e_pixel"] = e_pixel; result["n_kontakt"] = n_kontakt;
+	result["d_nyers"] = d_nyers; result["e_pixel"] = e_base; result["n_kontakt"] = n_kontakt;
 	result["damaged_count"] = damaged_count; result["destroyed_count"] = destroyed_count;
 	result["recoil_damage"] = max_recoil; result["knockback_speed"] = kb;
 	result["kint_stored_damage"] = kint_stored_damage; result["instakill"] = instakill;
 	result["bleeding"] = bleeding; result["jap_severed"] = jap_severed;
+	result["dust_events"] = dust_events; result["fragment_clusters"] = fragment_clusters;
 	return result;
 }
 
@@ -461,8 +509,7 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 		if ((int)s_bfs_stamp.size() < total) s_bfs_stamp.assign(total, 0);
 
 		std::vector<int> seeds;
-		s_bfs_cur_id++;
-		int seed_mark = s_bfs_cur_id;
+		s_bfs_cur_id++; int seed_mark = s_bfs_cur_id;
 		for (size_t i = 0; i < s_last_destroyed.size(); ++i) {
 			int idx = s_last_destroyed[i];
 			int cx = idx % size_x, cy = (idx / size_x) % size_y, cz = idx / (size_x * size_y);
@@ -471,17 +518,15 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 				if (is_valid_coord(nx, ny, nz)) {
 					int ni = get_index(nx, ny, nz);
 					if (ids_w[ni] != 0 && s_bfs_stamp[ni] != seed_mark) {
-						s_bfs_stamp[ni] = seed_mark;
-						seeds.push_back(ni);
+						s_bfs_stamp[ni] = seed_mark; seeds.push_back(ni);
 					}
 				}
 			}
 		}
 		s_last_destroyed.clear();
 
-		const int MAX_TERRAIN_CLUSTER = 1800;
-		std::vector<int> resolved;
-		bool any_extracted = false;
+		const int MAX_TERRAIN_CLUSTER = 1400;
+		std::vector<int> resolved; bool any_extracted = false;
 
 		for (size_t s = 0; s < seeds.size(); ++s) {
 			int start_idx = seeds[s];
@@ -490,8 +535,7 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 			for (size_t r = 0; r < resolved.size(); ++r) if (s_bfs_stamp[start_idx] == resolved[r]) { skip = true; break; }
 			if (skip) continue;
 
-			s_bfs_cur_id++;
-			int cur_mark = s_bfs_cur_id;
+			s_bfs_cur_id++; int cur_mark = s_bfs_cur_id;
 			std::vector<int> comp; comp.reserve(256);
 			std::queue<int> q; q.push(start_idx); s_bfs_stamp[start_idx] = cur_mark;
 			bool anchored = false;
@@ -507,8 +551,7 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 					if (is_valid_coord(nx, ny, nz)) {
 						int ni = get_index(nx, ny, nz);
 						if (ids_w[ni] != 0 && s_bfs_stamp[ni] != cur_mark) {
-							s_bfs_stamp[ni] = cur_mark;
-							q.push(ni);
+							s_bfs_stamp[ni] = cur_mark; q.push(ni);
 						}
 					}
 				}
@@ -522,8 +565,7 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 					c_ids.push_back(idx / (size_x * size_y)); c_ids.push_back(ids_w[idx]);
 					ids_w[idx] = 0; dur_w[idx] = 0;
 				}
-				detached.push_back(c_ids);
-				any_extracted = true;
+				detached.push_back(c_ids); any_extracted = true;
 			}
 		}
 		if (any_extracted) rebuild_mesh();
