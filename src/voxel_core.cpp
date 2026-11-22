@@ -14,6 +14,7 @@ static const VoxelBody3D* s_last_damaged_body = nullptr;
 static std::vector<int> s_last_destroyed;
 static std::vector<int> s_bfs_stamp;
 static int s_bfs_cur_id = 1;
+static Ref<StandardMaterial3D> s_shared_voxel_material;
 
 VoxelBody3D::VoxelBody3D() {
 	PixelDatabase::init_database();
@@ -31,10 +32,13 @@ VoxelBody3D::~VoxelBody3D() {}
 
 void VoxelBody3D::ensure_render_resources() {
 	if (voxel_mesh.is_null()) { voxel_mesh.instantiate(); set_mesh(voxel_mesh); }
+	if (s_shared_voxel_material.is_null()) {
+		s_shared_voxel_material.instantiate();
+		s_shared_voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
+		s_shared_voxel_material->set_roughness(0.82f);
+	}
 	if (voxel_material.is_null()) {
-		voxel_material.instantiate();
-		voxel_material->set_flag(BaseMaterial3D::FLAG_ALBEDO_FROM_VERTEX_COLOR, true);
-		voxel_material->set_roughness(0.82f);
+		voxel_material = s_shared_voxel_material;
 		set_material_override(voxel_material);
 	}
 }
@@ -207,7 +211,7 @@ void VoxelBody3D::rebuild_mesh() {
 	bool has_dur = (!is_sleeping && voxel_durability.size() == voxel_ids.size());
 	const int32_t* dur_r = has_dur ? voxel_durability.ptr() : nullptr;
 	const float s = voxel_scale; int y_lim = MIN(size_y - 1, max_filled_y);
-	int y_solid_bottom = (is_terrain_chunk && is_sleeping) ? MAX(1, min_terrain_y - 1) : 0;
+	int y_solid_bottom = is_terrain_chunk ? MAX(1, min_terrain_y - 4) : 0;
 	int surf_band_top = MIN(y_lim, max_terrain_y + 2);
 
 	auto get_key = [&](int x, int y, int z, int idx) -> uint16_t {
@@ -217,9 +221,11 @@ void VoxelBody3D::rebuild_mesh() {
 			int32_t md = PixelDatabase::get_pixel_fast(id).max_durability;
 			hp_b = (md > 0) ? CLAMP((dur_r[idx] * 4) / md, 1, 4) : 4;
 		}
-		int grain = (id == 34 || id == 33) ? ((int)(cyd_fast_hash(x, y / 3, z, 11) * 3.0f)) : ((int)(cyd_fast_hash(x, y, z, 17) * 3.0f));
+		int grain = 1;
+		if (id == 34 || id == 33 || id == 36) grain = (int)(cyd_fast_hash(x, y / 3, z, 11) * 3.0f);
+		else if (id == 35) grain = (int)(cyd_fast_hash(x >> 2, y >> 2, z >> 2, 17) * 2.0f);
+		else if (id == 51 || id == 1 || id == 17) grain = (int)(cyd_fast_hash(x >> 3, y >> 2, z >> 3, 17) * 2.0f);
 		if (y + 1 < size_y && (ids_r[get_index(MIN(size_x-1,x+1), y+1, z)] != 0 || ids_r[get_index(x, y+1, MIN(size_z-1,z+1))] != 0)) grain = MAX(0, grain - 1);
-		if (id == 35 && y + 2 < size_y && ids_r[get_index(x, y + 2, z)] != 0) grain = MAX(0, grain - 1);
 		uint16_t shade = (uint16_t)CLAMP(hp_b * 2 + grain - 2, 1, 7);
 		return ((uint16_t)id << 3) | shade;
 	};
@@ -239,7 +245,7 @@ void VoxelBody3D::rebuild_mesh() {
 		int dy = (dir == 0) ? 1 : -1; float dl = (dir == 0) ? 0.96f : 0.45f;
 		for (int y = y_solid_bottom; y <= y_lim; ++y) {
 			int x0_b = 0, x1_b = size_x - 1, z0_b = 0, z1_b = size_z - 1;
-			if (is_terrain_chunk && is_sleeping && y > surf_band_top) {
+			if (is_terrain_chunk && y > surf_band_top) {
 				if (high_max_x < high_min_x) break;
 				x0_b = MAX(0, high_min_x); x1_b = MIN(size_x - 1, high_max_x);
 				z0_b = MAX(0, high_min_z); z1_b = MIN(size_z - 1, high_max_z);
@@ -278,7 +284,7 @@ void VoxelBody3D::rebuild_mesh() {
 		int dz_s = (dir == 0) ? 1 : -1; float dl = (dir == 0) ? 0.85f : 0.66f;
 		for (int z = 0; z < size_z; ++z) {
 			bool any = false, at_border = (z + dz_s < 0 || z + dz_s >= size_z);
-			int z_ylim = (is_terrain_chunk && is_sleeping && (z < high_min_z - 1 || z > high_max_z + 1)) ? surf_band_top : y_lim;
+			int z_ylim = (is_terrain_chunk && (z < high_min_z - 1 || z > high_max_z + 1)) ? surf_band_top : y_lim;
 			for (int x = 0; x < size_x; ++x) {
 				int neighbor_surf_y = (is_terrain_chunk && at_border) ? cyd_get_global_terrain_y(chunk_gx_origin + x, chunk_gz_origin + z + dz_s, cached_world_seed) : -1;
 				for (int y = y_solid_bottom; y <= z_ylim; ++y) {
@@ -316,7 +322,7 @@ void VoxelBody3D::rebuild_mesh() {
 		int dx_s = (dir == 0) ? 1 : -1; float dl = (dir == 0) ? 0.78f : 0.72f;
 		for (int x = 0; x < size_x; ++x) {
 			bool any = false, at_border = (x + dx_s < 0 || x + dx_s >= size_x);
-			int x_ylim = (is_terrain_chunk && is_sleeping && (x < high_min_x - 1 || x > high_max_x + 1)) ? surf_band_top : y_lim;
+			int x_ylim = (is_terrain_chunk && (x < high_min_x - 1 || x > high_max_x + 1)) ? surf_band_top : y_lim;
 			for (int z = 0; z < size_z; ++z) {
 				int neighbor_surf_y = (is_terrain_chunk && at_border) ? cyd_get_global_terrain_y(chunk_gx_origin + x + dx_s, chunk_gz_origin + z, cached_world_seed) : -1;
 				for (int y = y_solid_bottom; y <= x_ylim; ++y) {
@@ -384,8 +390,7 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 		return false;
 	};
 
-	int r = MAX(0, contact_radius);
-	int r_shock = r + 2;
+	int r = MAX(0, contact_radius), r_shock = r + 2;
 	std::vector<int> layer_vox[4];
 	for (int dz = -r_shock; dz <= r_shock; ++dz)
 		for (int dy = -r_shock; dy <= r_shock; ++dy)
@@ -396,20 +401,15 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 				if (!is_valid_coord(vx, vy, vz)) continue;
 				int idx = get_index(vx, vy, vz);
 				if (ids_w[idx] == 0) continue;
-				float dist = std::sqrt((float)d2);
-				int layer = (d2 <= r * r && is_exposed_to_air(vx, vy, vz)) ? 0 : CLAMP((int)std::ceil(dist - (float)r), 1, 3);
+				int layer = (d2 <= r * r && is_exposed_to_air(vx, vy, vz)) ? 0 : CLAMP((int)std::ceil(std::sqrt((float)d2) - (float)r), 1, 3);
 				layer_vox[layer].push_back(idx);
 			}
 
 	int n_kontakt = MAX(1, (int)layer_vox[0].size());
 	float e_base = d_nyers / (1.0f + (float)(n_kontakt - 1) * k_forma);
 	const float shock_atten[4] = {1.0f, 0.42f, 0.16f, 0.05f};
-
 	int destroyed_count = 0, damaged_count = 0; float max_recoil = 0.0f;
 	bool instakill = false, bleeding = false, jap_severed = false;
-	PackedInt32Array dust_events;
-	std::vector<int> frac_indices;
-	std::vector<uint8_t> frac_ids;
 
 	for (int L = 0; L < 4; ++L) {
 		float e_layer = e_base * shock_atten[L];
@@ -419,10 +419,7 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 			if (tid == 0) continue;
 			const PixelProperties& tp = PixelDatabase::get_pixel_fast(tid);
 			float eff_ak = (float)tp.ak_threshold;
-			if (bare_hand) {
-				if (tid == 33 || tid == 17 || (tid >= 24 && tid <= 31)) eff_ak = 999999.0f;
-				else if (tid == 34 || tid == 36) eff_ak = MIN(eff_ak, e_base * 0.28f);
-			}
+			if (bare_hand && (tid == 33 || tid == 17 || (tid >= 24 && tid <= 31))) eff_ak = 999999.0f;
 			if (L == 0) {
 				float hr = (float)tp.hardness / MAX(1.0f, attacker_hardness);
 				float recoil = e_layer * (hr * hr);
@@ -430,10 +427,7 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 			}
 			float net_dmg = e_layer - eff_ak;
 			if (net_dmg <= 0.0f) continue;
-
-			int32_t dmg_int = (int32_t)std::round(net_dmg);
-			if (bare_hand && tid == 34 && L == 0) dmg_int = MAX(dmg_int, dur_w[idx]);
-			dur_w[idx] -= dmg_int;
+			dur_w[idx] -= (int32_t)std::round(net_dmg);
 			damaged_count++;
 			if (dur_w[idx] <= 0) {
 				if (attacker_pixel_id == 29 && tp.max_durability < attacker_max_dur) {
@@ -443,32 +437,10 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 				if (tid == 68 || tid == 69) instakill = true;
 				if (tid == 76) bleeding = true;
 				if (tid == 94) jap_severed = true;
-
-				int vx = idx % size_x, vy = (idx / size_x) % size_y, vz = idx / (size_x * size_y);
-				bool is_fracturable = (tid == 34 || tid == 33 || tid == 36 || tid == 17 || tid == 8 || tid == 56 || tid == 90 || (tid >= 24 && tid <= 31));
-				int h_val = (vx * 73856093 ^ vy * 19349663 ^ vz * 83492791) & 7;
-				if (!is_fracturable || h_val <= 1) {
-					dust_events.push_back(vx); dust_events.push_back(vy); dust_events.push_back(vz); dust_events.push_back(tid);
-				} else {
-					frac_indices.push_back(idx); frac_ids.push_back(tid);
-				}
 				ids_w[idx] = 0; dur_w[idx] = 0; destroyed_count++;
 				s_last_destroyed.push_back(idx);
 			}
 		}
-	}
-
-	Array fragment_clusters;
-	if (!frac_indices.empty()) {
-		int num_groups = CLAMP((int)frac_indices.size() / 4 + 1, 1, 3);
-		std::vector<PackedInt32Array> groups(num_groups);
-		for (size_t i = 0; i < frac_indices.size(); ++i) {
-			int idx = frac_indices[i];
-			int vx = idx % size_x, vy = (idx / size_x) % size_y, vz = idx / (size_x * size_y);
-			int g = ((vx / 2) + (vy / 2) + (vz / 2)) % num_groups;
-			groups[g].push_back(vx); groups[g].push_back(vy); groups[g].push_back(vz); groups[g].push_back(frac_ids[i]);
-		}
-		for (int g = 0; g < num_groups; ++g) if (groups[g].size() > 0) fragment_clusters.push_back(groups[g]);
 	}
 
 	float kb = (total_mass_pm > 0) ? ((d_nyers * (1.0f + (float)n_kontakt * 0.02f)) / (float)total_mass_pm) : 0.0f;
@@ -481,7 +453,6 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 	result["recoil_damage"] = max_recoil; result["knockback_speed"] = kb;
 	result["kint_stored_damage"] = kint_stored_damage; result["instakill"] = instakill;
 	result["bleeding"] = bleeding; result["jap_severed"] = jap_severed;
-	result["dust_events"] = dust_events; result["fragment_clusters"] = fragment_clusters;
 	return result;
 }
 
@@ -507,9 +478,7 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 	if (is_terrain_chunk) {
 		if (s_last_damaged_body != this || s_last_destroyed.empty()) return detached;
 		if ((int)s_bfs_stamp.size() < total) s_bfs_stamp.assign(total, 0);
-
-		std::vector<int> seeds;
-		s_bfs_cur_id++; int seed_mark = s_bfs_cur_id;
+		std::vector<int> seeds; s_bfs_cur_id++; int seed_mark = s_bfs_cur_id;
 		for (size_t i = 0; i < s_last_destroyed.size(); ++i) {
 			int idx = s_last_destroyed[i];
 			int cx = idx % size_x, cy = (idx / size_x) % size_y, cz = idx / (size_x * size_y);
@@ -517,42 +486,32 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 				int nx = cx + dx[d], ny = cy + dy[d], nz = cz + dz[d];
 				if (is_valid_coord(nx, ny, nz)) {
 					int ni = get_index(nx, ny, nz);
-					if (ids_w[ni] != 0 && s_bfs_stamp[ni] != seed_mark) {
-						s_bfs_stamp[ni] = seed_mark; seeds.push_back(ni);
-					}
+					if (ids_w[ni] != 0 && s_bfs_stamp[ni] != seed_mark) { s_bfs_stamp[ni] = seed_mark; seeds.push_back(ni); }
 				}
 			}
 		}
 		s_last_destroyed.clear();
-
 		const int MAX_TERRAIN_CLUSTER = 1400;
 		std::vector<int> resolved; bool any_extracted = false;
-
 		for (size_t s = 0; s < seeds.size(); ++s) {
 			int start_idx = seeds[s];
 			if (ids_w[start_idx] == 0) continue;
 			bool skip = false;
 			for (size_t r = 0; r < resolved.size(); ++r) if (s_bfs_stamp[start_idx] == resolved[r]) { skip = true; break; }
 			if (skip) continue;
-
 			s_bfs_cur_id++; int cur_mark = s_bfs_cur_id;
 			std::vector<int> comp; comp.reserve(256);
 			std::queue<int> q; q.push(start_idx); s_bfs_stamp[start_idx] = cur_mark;
 			bool anchored = false;
-
 			while (!q.empty()) {
 				int c = q.front(); q.pop(); comp.push_back(c);
 				int cx = c % size_x, cy = (c / size_x) % size_y, cz = c / (size_x * size_y);
-				if (cy <= min_terrain_y || cx == 0 || cx == size_x - 1 || cz == 0 || cz == size_z - 1 || (int)comp.size() >= MAX_TERRAIN_CLUSTER) {
-					anchored = true; break;
-				}
+				if (cy <= min_terrain_y || cx == 0 || cx == size_x - 1 || cz == 0 || cz == size_z - 1 || (int)comp.size() >= MAX_TERRAIN_CLUSTER) { anchored = true; break; }
 				for (int d = 0; d < 6; ++d) {
 					int nx = cx + dx[d], ny = cy + dy[d], nz = cz + dz[d];
 					if (is_valid_coord(nx, ny, nz)) {
 						int ni = get_index(nx, ny, nz);
-						if (ids_w[ni] != 0 && s_bfs_stamp[ni] != cur_mark) {
-							s_bfs_stamp[ni] = cur_mark; q.push(ni);
-						}
+						if (ids_w[ni] != 0 && s_bfs_stamp[ni] != cur_mark) { s_bfs_stamp[ni] = cur_mark; q.push(ni); }
 					}
 				}
 			}
