@@ -3,11 +3,17 @@
 #include <godot_cpp/classes/base_material3d.hpp>
 #include <cmath>
 #include <queue>
+#include <vector>
 
 using namespace godot;
 
 extern float cyd_fast_hash(int x, int y, int z, int seed);
 extern int cyd_get_global_terrain_y(int gx, int gz, int seed);
+
+static const VoxelBody3D* s_last_damaged_body = nullptr;
+static std::vector<int> s_last_destroyed;
+static std::vector<int> s_bfs_stamp;
+static int s_bfs_cur_id = 1;
 
 VoxelBody3D::VoxelBody3D() {
 	PixelDatabase::init_database();
@@ -178,6 +184,7 @@ Dictionary VoxelBody3D::raycast_voxel(Vector3 world_origin, Vector3 world_dir, f
 }
 
 void VoxelBody3D::recalculate_mass_and_center() {
+	if (is_terrain_chunk) { total_mass_pm = 1000000000LL; center_of_mass = Vector3(3.2f, 2.0f, 3.2f); return; }
 	const uint8_t* ids_r = voxel_ids.ptr();
 	total_mass_pm = 0; double sx = 0.0, sy = 0.0, sz = 0.0;
 	int y_lim = MIN(size_y - 1, max_filled_y);
@@ -351,6 +358,8 @@ void VoxelBody3D::rebuild_mesh() {
 
 Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius, int attacker_pixel_id, float impact_speed, float attacker_mass_pm, float k_forma, float damage_scale, int light_level) {
 	wake_up();
+	s_last_damaged_body = this;
+	s_last_destroyed.clear();
 	Dictionary result; uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
 	float attacker_hardness = 10.0f; int32_t attacker_max_dur = 180;
 	if (attacker_pixel_id > 0 && attacker_pixel_id <= 130) {
@@ -411,6 +420,7 @@ Dictionary VoxelBody3D::apply_impact_damage(Vector3i hit_pos, int contact_radius
 				if (tid == 76) bleeding = true;
 				if (tid == 94) jap_severed = true;
 				ids_w[idx] = 0; dur_w[idx] = 0; destroyed_count++;
+				s_last_destroyed.push_back(idx);
 			}
 		}
 	}
@@ -444,8 +454,83 @@ Array VoxelBody3D::check_and_extract_disconnected_bodies() {
 	wake_up();
 	Array detached; int total = size_x * size_y * size_z;
 	uint8_t* ids_w = voxel_ids.ptrw(); int32_t* dur_w = voxel_durability.ptrw();
-	std::vector<uint8_t> visited(total, 0); std::vector<std::vector<int>> comps;
 	const int dx[6] = {1,-1,0,0,0,0}, dy[6] = {0,0,1,-1,0,0}, dz[6] = {0,0,0,0,1,-1};
+
+	if (is_terrain_chunk) {
+		if (s_last_damaged_body != this || s_last_destroyed.empty()) return detached;
+		if ((int)s_bfs_stamp.size() < total) s_bfs_stamp.assign(total, 0);
+
+		std::vector<int> seeds;
+		s_bfs_cur_id++;
+		int seed_mark = s_bfs_cur_id;
+		for (size_t i = 0; i < s_last_destroyed.size(); ++i) {
+			int idx = s_last_destroyed[i];
+			int cx = idx % size_x, cy = (idx / size_x) % size_y, cz = idx / (size_x * size_y);
+			for (int d = 0; d < 6; ++d) {
+				int nx = cx + dx[d], ny = cy + dy[d], nz = cz + dz[d];
+				if (is_valid_coord(nx, ny, nz)) {
+					int ni = get_index(nx, ny, nz);
+					if (ids_w[ni] != 0 && s_bfs_stamp[ni] != seed_mark) {
+						s_bfs_stamp[ni] = seed_mark;
+						seeds.push_back(ni);
+					}
+				}
+			}
+		}
+		s_last_destroyed.clear();
+
+		const int MAX_TERRAIN_CLUSTER = 1800;
+		std::vector<int> resolved;
+		bool any_extracted = false;
+
+		for (size_t s = 0; s < seeds.size(); ++s) {
+			int start_idx = seeds[s];
+			if (ids_w[start_idx] == 0) continue;
+			bool skip = false;
+			for (size_t r = 0; r < resolved.size(); ++r) if (s_bfs_stamp[start_idx] == resolved[r]) { skip = true; break; }
+			if (skip) continue;
+
+			s_bfs_cur_id++;
+			int cur_mark = s_bfs_cur_id;
+			std::vector<int> comp; comp.reserve(256);
+			std::queue<int> q; q.push(start_idx); s_bfs_stamp[start_idx] = cur_mark;
+			bool anchored = false;
+
+			while (!q.empty()) {
+				int c = q.front(); q.pop(); comp.push_back(c);
+				int cx = c % size_x, cy = (c / size_x) % size_y, cz = c / (size_x * size_y);
+				if (cy <= min_terrain_y || cx == 0 || cx == size_x - 1 || cz == 0 || cz == size_z - 1 || (int)comp.size() >= MAX_TERRAIN_CLUSTER) {
+					anchored = true; break;
+				}
+				for (int d = 0; d < 6; ++d) {
+					int nx = cx + dx[d], ny = cy + dy[d], nz = cz + dz[d];
+					if (is_valid_coord(nx, ny, nz)) {
+						int ni = get_index(nx, ny, nz);
+						if (ids_w[ni] != 0 && s_bfs_stamp[ni] != cur_mark) {
+							s_bfs_stamp[ni] = cur_mark;
+							q.push(ni);
+						}
+					}
+				}
+			}
+			resolved.push_back(cur_mark);
+			if (!anchored && !comp.empty()) {
+				PackedInt32Array c_ids;
+				for (size_t k = 0; k < comp.size(); ++k) {
+					int idx = comp[k];
+					c_ids.push_back(idx % size_x); c_ids.push_back((idx / size_x) % size_y);
+					c_ids.push_back(idx / (size_x * size_y)); c_ids.push_back(ids_w[idx]);
+					ids_w[idx] = 0; dur_w[idx] = 0;
+				}
+				detached.push_back(c_ids);
+				any_extracted = true;
+			}
+		}
+		if (any_extracted) rebuild_mesh();
+		return detached;
+	}
+
+	std::vector<uint8_t> visited(total, 0); std::vector<std::vector<int>> comps;
 	for (int i = 0; i < total; ++i) {
 		if (ids_w[i] == 0 || visited[i]) continue;
 		std::vector<int> cl; std::queue<int> q; q.push(i); visited[i] = 1;
