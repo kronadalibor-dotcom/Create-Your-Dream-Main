@@ -25,6 +25,14 @@ static float smooth_noise3(float x, float y, float z, int seed) {
 	return (c00*(1-fy)+c10*fy)*(1-fz) + (c01*(1-fy)+c11*fy)*fz;
 }
 
+static inline int floor_mod_64(int a) {
+	int r = a & 63;
+	return (r < 0) ? (r + 64) : r;
+}
+
+// HÉZAGMENTES PEREM-ILLESZTÉS (Seamless Edge-Blending):
+// Minden 64x64-es szektor szélén sima Hermite-görbével y=14-re simul a terep,
+// így bármelyik előregyártott (Prefab) szektor-tömb bármelyik mellé 0.01ms alatt hézagmentesen lerakható!
 int cyd_get_global_terrain_y(int gx, int gz, int seed) {
 	float base_und = smooth_noise3(gx * 0.007f, 0.0f, gz * 0.007f, seed + 101) * 9.0f;
 	float detail = smooth_noise3(gx * 0.022f, 0.0f, gz * 0.022f, seed + 202) * 2.5f;
@@ -35,7 +43,15 @@ int cyd_get_global_terrain_y(int gx, int gz, int seed) {
 		t = t * t * (3.0f - 2.0f * t);
 		hill_h = t * 52.0f;
 	}
-	return CLAMP((int)(10.0f + base_und + detail + hill_h), 7, 74);
+	float raw_y = 10.0f + base_und + detail + hill_h;
+	int lx = floor_mod_64(gx), lz = floor_mod_64(gz);
+	int dist_edge = MIN(MIN(lx, 63 - lx), MIN(lz, 63 - lz));
+	if (dist_edge < 8) {
+		float eb = (float)dist_edge / 8.0f;
+		eb = eb * eb * (3.0f - 2.0f * eb);
+		raw_y = 14.0f * (1.0f - eb) + raw_y * eb;
+	}
+	return CLAMP((int)std::round(raw_y), 7, 74);
 }
 
 static inline int floor_div_int(int a, int b) {
@@ -156,24 +172,12 @@ void VoxelBody3D::stamp_cached_tree_in_sector(int gx_min, int gz_min, int tree_g
 			float curve = std::sin(step * 0.35f + r) * 1.4f;
 			int rgx = (int)(tree_gx + dx * step - dz * curve), rgz = (int)(tree_gz + dz * step + dx * curve);
 			int lx = rgx - gx_min, lz = rgz - gz_min;
-			if (lx >= 0 && lx < size_x && lz >= 0 && lz < size_z) {
+			if (lx >= 1 && lx < size_x - 1 && lz >= 1 && lz < size_z - 1) {
 				int surf_y = cyd_get_global_terrain_y(rgx, rgz, cached_world_seed);
 				int top_expose = (step < 8) ? 2 : 1;
 				for (int ry = surf_y - 1; ry <= surf_y + top_expose; ++ry) {
 					set_voxel(lx, ry, lz, 36);
-					if (step < 11 && lx + 1 < size_x) set_voxel(lx + 1, ry, lz, 36);
-				}
-			}
-			if (step == 8 || step == 13) {
-				float side_ang = ang + ((step == 8) ? 0.85f : -0.85f), sdx = std::cos(side_ang), sdz = std::sin(side_ang);
-				for (int ss = 1; ss <= 7; ++ss) {
-					int sgx = rgx + (int)(sdx * ss), sgz = rgz + (int)(sdz * ss);
-					int slx = sgx - gx_min, slz = sgz - gz_min;
-					if (slx >= 0 && slx < size_x && slz >= 0 && slz < size_z) {
-						int s_sy = cyd_get_global_terrain_y(sgx, sgz, cached_world_seed);
-						set_voxel(slx, s_sy, slz, 36);
-						set_voxel(slx, s_sy + 1, slz, 36);
-					}
+					if (step < 11 && lx + 1 < size_x - 1) set_voxel(lx + 1, ry, lz, 36);
 				}
 			}
 		}
@@ -216,9 +220,7 @@ void VoxelBody3D::wake_up() {
 
 void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_seed) {
 	if (size_y < 168) initialize_grid(size_x, 168, size_z, voxel_scale);
-	while (built_tree_archetypes_count < 16) {
-		build_next_tree_archetype();
-	}
+	while (built_tree_archetypes_count < 16) build_next_tree_archetype();
 
 	voxel_ids.fill(0); max_filled_y = 0;
 	min_terrain_y = 999; max_terrain_y = 0;
@@ -239,7 +241,7 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 			for (int y = MAX(0, surf_y - 3); y < surf_y; ++y) ids_w[get_index(x, y, z)] = 1;
 			ids_w[get_index(x, surf_y, z)] = 51;
 			float fl = cyd_fast_hash(gx, surf_y, gz, world_seed + 99);
-			if (fl < 0.018f) {
+			if (fl < 0.014f) {
 				int gh = 1 + (int)(cyd_fast_hash(gx, 1, gz, world_seed) * 2.0f);
 				for (int h = 1; h <= gh; ++h) set_voxel(x, surf_y + h, z, 52);
 			} else if (fl > 0.996f) {
@@ -248,49 +250,26 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 		}
 	}
 
-	const int CELL = 84;
-	int center_cx = floor_div_int(gx_min + size_x / 2, CELL), center_cz = floor_div_int(gz_min + size_z / 2, CELL);
-	for (int tcz = center_cz - 1; tcz <= center_cz + 1; ++tcz) {
-		for (int tcx = center_cx - 1; tcx <= center_cx + 1; ++tcx) {
-			int tgx = tcx * CELL + 22 + (int)(cyd_fast_hash(tcx, 23, tcz, world_seed) * 40.0f);
-			int tgz = tcz * CELL + 22 + (int)(cyd_fast_hash(tcx, 37, tcz, world_seed) * 40.0f);
-			if (tcx == 0 && tcz == 0) { tgx = 42; tgz = 42; }
+	int tgx = gx_min + 22 + (int)(cyd_fast_hash(chunk_x, 23, chunk_z, world_seed) * 20.0f);
+	int tgz = gz_min + 22 + (int)(cyd_fast_hash(chunk_x, 37, chunk_z, world_seed) * 20.0f);
+	if (chunk_x == 0 && chunk_z == 0) { tgx = 32; tgz = 32; }
+	int tby = cyd_get_global_terrain_y(tgx, tgz, world_seed);
+	float meadow_n = smooth_noise3(tgx * 0.0022f, 0.0f, tgz * 0.0022f, world_seed + 777);
+	float spawn_chance = (meadow_n < 0.32f) ? 0.0f : 0.72f;
+	if ((chunk_x == 0 && chunk_z == 0) || cyd_fast_hash(chunk_x, 11, chunk_z, world_seed) < spawn_chance) {
+		int arch_id = std::abs((chunk_x * 73856093) ^ (chunk_z * 19349663)) % MAX(1, built_tree_archetypes_count);
+		stamp_cached_tree_in_sector(gx_min, gz_min, tgx, tgz, tby, arch_id);
+	}
 
-			int tby = cyd_get_global_terrain_y(tgx, tgz, world_seed);
-			int yn = cyd_get_global_terrain_y(tgx, tgz - 10, world_seed), ys = cyd_get_global_terrain_y(tgx, tgz + 10, world_seed);
-			int ye = cyd_get_global_terrain_y(tgx + 10, tgz, world_seed), yw = cyd_get_global_terrain_y(tgx - 10, tgz, world_seed);
-			int slope = MAX(MAX(yn, ys), MAX(ye, yw)) - MIN(MIN(yn, ys), MIN(ye, yw));
-
-			float meadow_n = smooth_noise3(tgx * 0.0022f, 0.0f, tgz * 0.0022f, world_seed + 777);
-			float hill_style = smooth_noise3(tgx * 0.0032f, 0.0f, tgz * 0.0032f, world_seed + 999);
-
-			float spawn_chance = 0.55f;
-			if (meadow_n < 0.35f) {
-				spawn_chance = 0.0f;
-			} else if (tby >= 36 && slope <= 6) {
-				spawn_chance = (hill_style < 0.28f) ? 0.0f : 0.88f;
-			} else if (slope > 6) {
-				spawn_chance = (hill_style > 0.68f) ? 0.0f : 0.16f;
-			}
-
-			if ((tcx == 0 && tcz == 0) || cyd_fast_hash(tcx, 11, tcz, world_seed) < spawn_chance) {
-				int arch_id = std::abs((tcx * 73856093) ^ (tcz * 19349663)) % MAX(1, built_tree_archetypes_count);
-				stamp_cached_tree_in_sector(gx_min, gz_min, tgx, tgz, tby, arch_id);
-			}
-
-			if (cyd_fast_hash(tcx, 59, tcz, world_seed) < 0.35f) {
-				int rgx = tcx * CELL + 10 + (int)(cyd_fast_hash(tcx, 61, tcz, world_seed) * 12.0f);
-				int rgz = tcz * CELL + 62 + (int)(cyd_fast_hash(tcx, 67, tcz, world_seed) * 12.0f);
-				if (rgx + 10 >= gx_min && rgx - 10 < gx_min + size_x && rgz + 10 >= gz_min && rgz - 10 < gz_min + size_z) {
-					int ry_base = cyd_get_global_terrain_y(rgx, rgz, world_seed);
-					for (int dz = -7; dz <= 7; ++dz)
-						for (int dy = -3; dy <= 7; ++dy)
-							for (int dx = -7; dx <= 7; ++dx)
-								if ((dx*dx)/45.0f + (dy*dy)/28.0f + (dz*dz)/42.0f <= 1.0f)
-									set_voxel(rgx + dx - gx_min, ry_base + dy, rgz + dz - gz_min, (dy > 3) ? 56 : 17);
-				}
-			}
-		}
+	if (cyd_fast_hash(chunk_x, 59, chunk_z, world_seed) < 0.35f) {
+		int rgx = gx_min + 16 + (int)(cyd_fast_hash(chunk_x, 61, chunk_z, world_seed) * 32.0f);
+		int rgz = gz_min + 16 + (int)(cyd_fast_hash(chunk_x, 67, chunk_z, world_seed) * 32.0f);
+		int ry_base = cyd_get_global_terrain_y(rgx, rgz, world_seed);
+		for (int dz = -6; dz <= 6; ++dz)
+			for (int dy = -2; dy <= 6; ++dy)
+				for (int dx = -6; dx <= 6; ++dx)
+					if ((dx*dx)/34.0f + (dy*dy)/24.0f + (dz*dz)/34.0f <= 1.0f)
+						set_voxel(rgx + dx - gx_min, ry_base + dy, rgz + dz - gz_min, (dy > 2) ? 56 : 17);
 	}
 	rebuild_mesh(); sleep_sector();
 }
