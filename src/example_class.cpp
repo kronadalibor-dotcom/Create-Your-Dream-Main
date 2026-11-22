@@ -10,13 +10,7 @@ using namespace godot;
 PixelProperties PixelDatabase::pixels[131];
 bool PixelDatabase::initialized = false;
 
-// 100% Tiszta C++ Memória Fa-Gyorsítótár (Nulla Godot Node, Nulla összeomlás!):
-struct TreeVoxelOffset {
-	int8_t dx;
-	int8_t dy;
-	int8_t dz;
-	uint8_t id;
-};
+struct TreeVoxelOffset { int8_t dx, dy, dz; uint8_t id; };
 static std::vector<TreeVoxelOffset> tree_archetypes[100];
 int VoxelBody3D::built_tree_archetypes_count = 0;
 
@@ -160,10 +154,18 @@ static float smooth_noise3(float x, float y, float z, int seed) {
 	return (c00*(1-fy)+c10*fy)*(1-fz) + (c01*(1-fy)+c11*fy)*fz;
 }
 
+// MAGAS, ÍVELT DOMBOK ÉS VÖLGYEK (y = 10..74 pixel, nem sziklás hegyek, hanem magas füves dombok!):
 static int get_global_terrain_y(int gx, int gz, int seed) {
-	float n1 = smooth_noise3(gx * 0.0055f, 0.0f, gz * 0.0055f, seed) * 12.0f;
-	float n2 = smooth_noise3(gx * 0.018f, 0.0f, gz * 0.018f, seed + 101) * 3.0f;
-	return CLAMP((int)(14.0f + n1 + n2), 7, 32);
+	float base_und = smooth_noise3(gx * 0.007f, 0.0f, gz * 0.007f, seed + 101) * 9.0f;
+	float detail = smooth_noise3(gx * 0.022f, 0.0f, gz * 0.022f, seed + 202) * 2.5f;
+	float hill_n = smooth_noise3(gx * 0.0026f, 0.0f, gz * 0.0026f, seed);
+	float hill_h = 0.0f;
+	if (hill_n > 0.34f) {
+		float t = CLAMP((hill_n - 0.34f) / 0.66f, 0.0f, 1.0f);
+		t = t * t * (3.0f - 2.0f * t);
+		hill_h = t * 52.0f; // Magas, sima ívű dombok (+52 pixel = +5.2m magas dombtetők!)
+	}
+	return CLAMP((int)(10.0f + base_und + detail + hill_h), 7, 74);
 }
 
 static inline int floor_div_int(int a, int b) {
@@ -173,7 +175,7 @@ static inline int floor_div_int(int a, int b) {
 
 VoxelBody3D::VoxelBody3D() {
 	PixelDatabase::init_database();
-	size_x = 64; size_y = 128; size_z = 64; max_filled_y = 0; voxel_scale = 0.1f;
+	size_x = 64; size_y = 168; size_z = 64; max_filled_y = 0; voxel_scale = 0.1f;
 	min_terrain_y = 0; max_terrain_y = 32;
 	high_min_x = 0; high_max_x = -1; high_min_z = 0; high_max_z = -1;
 	chunk_gx_origin = 0; chunk_gz_origin = 0; cached_world_seed = 0;
@@ -195,7 +197,7 @@ void VoxelBody3D::ensure_render_resources() {
 	}
 }
 
-// 100% TISZTA C++ MEMÓRIA FA-SABLON ÉPÍTŐ (Godot Node-ok nélkül, 0 összeomlás!):
+// 100 EGYEDI FÜGGŐLEGES TÖRZSEJŰ ÉS 3-SZINTŰ ÁGAS TÖLGYFA-SABLON ÉPÍTŐ:
 void VoxelBody3D::build_single_tree_archetype(int idx) {
 	if (idx < 0 || idx >= 100 || !tree_archetypes[idx].empty()) return;
 	const int TX = 84, TY = 102, TZ = 84;
@@ -208,9 +210,7 @@ void VoxelBody3D::build_single_tree_archetype(int idx) {
 		return (x >= 0 && x < TX && y >= 0 && y < TY && z >= 0 && z < TZ) ? tg[t_idx(x, y, z)] : 0;
 	};
 
-	int seed = 1337 + idx * 9173;
-	int tgx = 42, tgz = 42, tby = 4;
-
+	int seed = 1337 + idx * 9173, tgx = 42, tgz = 42, tby = 6;
 	auto draw_leaf = [&](float cx, float cy, float cz, float rad) {
 		int ir = (int)std::ceil(rad);
 		for (int dz = -ir; dz <= ir; ++dz)
@@ -224,26 +224,15 @@ void VoxelBody3D::build_single_tree_archetype(int idx) {
 				}
 	};
 
+	// Egyenes, függőleges törzs (a domboldalban is függőlegesen áll, és az alja -6 pixelig lenyúlik a lejtőbe!):
 	float rot_off = fast_hash(idx, 9, idx * 3, seed) * 6.2831f;
-	int root_cnt = 4 + (idx % 3);
-	for (int r = 0; r < root_cnt; ++r) {
-		float ang = rot_off + r * (6.2831f / root_cnt) + fast_hash(r, idx, 1, seed) * 0.3f;
-		float dx = std::cos(ang), dz = std::sin(ang);
-		for (int step = 3; step < 15; ++step) {
-			int rx = (int)(tgx + dx * step), rz = (int)(tgz + dz * step), ry = MAX(0, (int)(tby + 2.5f - step * 0.25f)), rad = (step < 8) ? 2 : 1;
-			for (int oz = -rad; oz <= rad; ++oz)
-				for (int oy = -rad; oy <= rad; ++oy)
-					for (int ox = -rad; ox <= rad; ++ox)
-						if (ox*ox + oy*oy + oz*oz <= rad*rad) t_set(rx + ox, ry + oy, rz + oz, 36);
-		}
-	}
-
 	int trunk_h = 54 + (int)(fast_hash(idx, 3, idx * 7, seed) * 20.0f);
-	float base_r = 5.5f + fast_hash(idx, 5, 2, seed) * 1.2f;
-	for (int h = 0; h < trunk_h; ++h) {
-		float cx = tgx + std::sin(h * 0.05f + rot_off) * 1.1f, cz = tgz + std::cos(h * 0.05f + rot_off) * 1.1f;
+	float base_r = 5.4f + fast_hash(idx, 5, 2, seed) * 1.2f;
+	for (int h = -6; h < trunk_h; ++h) {
+		float wobble = (h > 4) ? 0.6f : 0.0f;
+		float cx = tgx + std::sin(h * 0.05f + rot_off) * wobble, cz = tgz + std::cos(h * 0.05f + rot_off) * wobble;
 		int cy = tby + h;
-		float rad = base_r - (float)h / trunk_h * 2.4f + (h < 6 ? (6 - h) * 0.3f : 0.0f);
+		float rad = base_r - (float)MAX(0, h) / trunk_h * 2.3f + (h < 6 ? (6 - MAX(0, h)) * 0.25f : 0.0f);
 		int ir = (int)std::ceil(rad);
 		for (int dz = -ir; dz <= ir; ++dz)
 			for (int dx = -ir; dx <= ir; ++dx) {
@@ -301,17 +290,56 @@ int VoxelBody3D::build_next_tree_archetype() {
 	return built_tree_archetypes_count;
 }
 
+// FÜGGŐLEGES FA + DOMBOLDALT BEHÁLÓZÓ, FÉLIG KILÁTSZÓ GYÖKÉRZET (36 = Tölgy-gyökér):
 void VoxelBody3D::stamp_cached_tree_in_sector(int gx_min, int gz_min, int tree_gx, int tree_gz, int tree_base_y, int arch_id) {
 	if (tree_gx + 42 < gx_min || tree_gx - 42 >= gx_min + size_x || tree_gz + 42 < gz_min || tree_gz - 42 >= gz_min + size_z) return;
+
+	// 1. Függőleges törzs, faágak és lombkorona bemásolása a 100-as gyorsítótárból:
 	const std::vector<TreeVoxelOffset>& tv = tree_archetypes[arch_id];
 	for (size_t i = 0; i < tv.size(); ++i) {
 		const TreeVoxelOffset& v = tv[i];
-		int lx = (tree_gx + v.dx) - gx_min;
-		int lz = (tree_gz + v.dz) - gz_min;
-		int ly = tree_base_y + v.dy;
+		int lx = (tree_gx + v.dx) - gx_min, lz = (tree_gz + v.dz) - gz_min, ly = tree_base_y + v.dy;
 		if (lx >= 0 && lx < size_x && lz >= 0 && lz < size_z && ly >= 0 && ly < size_y) {
 			if (v.id == 35 && get_voxel(lx, ly, lz) != 0) continue;
 			set_voxel(lx, ly, lz, v.id);
+		}
+	}
+
+	// 2. Domboldalt behálózó, félig a föld felett kilátszó gyökérhálózat (8 főgyökér + mellékgyökerek + összekötő gyökér-háló):
+	if (tree_gx + 26 < gx_min || tree_gx - 26 >= gx_min + size_x || tree_gz + 26 < gz_min || tree_gz - 26 >= gz_min + size_z) return;
+	float base_ang = (arch_id * 1.13f);
+	for (int r = 0; r < 8; ++r) {
+		float ang = base_ang + r * 0.7854f + fast_hash(r, tree_gx, tree_gz, cached_world_seed) * 0.25f;
+		float dx = std::cos(ang), dz = std::sin(ang);
+		int root_len = 16 + (r % 3) * 3;
+		for (int step = 3; step <= root_len; ++step) {
+			float curve = std::sin(step * 0.35f + r) * 1.4f;
+			int rgx = (int)(tree_gx + dx * step - dz * curve);
+			int rgz = (int)(tree_gz + dz * step + dx * curve);
+			int lx = rgx - gx_min, lz = rgz - gz_min;
+			if (lx >= 0 && lx < size_x && lz >= 0 && lz < size_z) {
+				int surf_y = get_global_terrain_y(rgx, rgz, cached_world_seed);
+				// A gyökér fele a földben (surf_y - 1 .. surf_y), a fele pedig kilátszik a fű felett (surf_y + 1 .. surf_y + 2)!
+				int top_expose = (step < 8) ? 2 : 1;
+				for (int ry = surf_y - 1; ry <= surf_y + top_expose; ++ry) {
+					set_voxel(lx, ry, lz, 36);
+					if (step < 11 && lx + 1 < size_x) set_voxel(lx + 1, ry, lz, 36);
+				}
+			}
+			// Keresztbe behálózó mellékgyökerek (Root Webbing):
+			if (step == 8 || step == 13) {
+				float side_ang = ang + ((step == 8) ? 0.85f : -0.85f);
+				float sdx = std::cos(side_ang), sdz = std::sin(side_ang);
+				for (int ss = 1; ss <= 7; ++ss) {
+					int sgx = rgx + (int)(sdx * ss), sgz = rgz + (int)(sdz * ss);
+					int slx = sgx - gx_min, slz = sgz - gz_min;
+					if (slx >= 0 && slx < size_x && slz >= 0 && slz < size_z) {
+						int s_sy = get_global_terrain_y(sgx, sgz, cached_world_seed);
+						set_voxel(slx, s_sy, slz, 36);
+						set_voxel(slx, s_sy + 1, slz, 36); // Félig kilátszó mellékgyökér!
+					}
+				}
+			}
 		}
 	}
 }
@@ -469,7 +497,7 @@ float VoxelBody3D::get_ground_y_near(float world_x, float current_feet_y, float 
 }
 
 void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_seed) {
-	if (size_y < 128) initialize_grid(size_x, 128, size_z, voxel_scale);
+	if (size_y < 168) initialize_grid(size_x, 168, size_z, voxel_scale);
 	while (built_tree_archetypes_count < 16) {
 		build_next_tree_archetype();
 	}
@@ -502,21 +530,42 @@ void VoxelBody3D::generate_biome1_sector(int chunk_x, int chunk_z, int world_see
 		}
 	}
 
-	const int CELL = 104;
+	// OKOS ERDŐ / MEZŐ / DOMB-TETŐ / DOMBOLDAL FA-ELOSZLÁS (84x84 pixeles cellákban):
+	const int CELL = 84;
 	int center_cx = floor_div_int(gx_min + size_x / 2, CELL), center_cz = floor_div_int(gz_min + size_z / 2, CELL);
 	for (int tcz = center_cz - 1; tcz <= center_cz + 1; ++tcz) {
 		for (int tcx = center_cx - 1; tcx <= center_cx + 1; ++tcx) {
-			if ((tcx == 0 && tcz == 0) || fast_hash(tcx, 11, tcz, world_seed) < 0.72f) {
-				int tgx = tcx * CELL + 28 + (int)(fast_hash(tcx, 23, tcz, world_seed) * 48.0f);
-				int tgz = tcz * CELL + 28 + (int)(fast_hash(tcx, 37, tcz, world_seed) * 48.0f);
-				if (tcx == 0 && tcz == 0) { tgx = 42; tgz = 42; }
-				int tby = get_global_terrain_y(tgx, tgz, world_seed);
+			int tgx = tcx * CELL + 22 + (int)(fast_hash(tcx, 23, tcz, world_seed) * 40.0f);
+			int tgz = tcz * CELL + 22 + (int)(fast_hash(tcx, 37, tcz, world_seed) * 40.0f);
+			if (tcx == 0 && tcz == 0) { tgx = 42; tgz = 42; }
+
+			int tby = get_global_terrain_y(tgx, tgz, world_seed);
+			int yn = get_global_terrain_y(tgx, tgz - 10, world_seed), ys = get_global_terrain_y(tgx, tgz + 10, world_seed);
+			int ye = get_global_terrain_y(tgx + 10, tgz, world_seed), yw = get_global_terrain_y(tgx - 10, tgz, world_seed);
+			int slope = MAX(MAX(yn, ys), MAX(ye, yw)) - MIN(MIN(yn, ys), MIN(ye, yw));
+
+			float meadow_n = smooth_noise3(tgx * 0.0022f, 0.0f, tgz * 0.0022f, world_seed + 777);
+			float hill_style = smooth_noise3(tgx * 0.0032f, 0.0f, tgz * 0.0032f, world_seed + 999);
+
+			float spawn_chance = 0.55f;
+			if (meadow_n < 0.35f) {
+				spawn_chance = 0.0f; // NYÍLT MEZŐ / TISZTÁS (0 fa!)
+			} else if (tby >= 36 && slope <= 6) {
+				// DOMB TETEJE: Sok fa (88%), KIVÉVE a kopár tetejű kilátó-dombokon (hill_style < 0.28)!
+				spawn_chance = (hill_style < 0.28f) ? 0.0f : 0.88f;
+			} else if (slope > 6) {
+				// DOMBOLDAL: Kevés fa (16%), vagy kopár oldalú dombon 0 fa (hill_style > 0.68)!
+				spawn_chance = (hill_style > 0.68f) ? 0.0f : 0.16f;
+			}
+
+			if ((tcx == 0 && tcz == 0) || fast_hash(tcx, 11, tcz, world_seed) < spawn_chance) {
 				int arch_id = std::abs((tcx * 73856093) ^ (tcz * 19349663)) % MAX(1, built_tree_archetypes_count);
 				stamp_cached_tree_in_sector(gx_min, gz_min, tgx, tgz, tby, arch_id);
 			}
-			if (fast_hash(tcx, 59, tcz, world_seed) < 0.42f) {
-				int rgx = tcx * CELL + 12 + (int)(fast_hash(tcx, 61, tcz, world_seed) * 14.0f);
-				int rgz = tcz * CELL + 76 + (int)(fast_hash(tcx, 67, tcz, world_seed) * 14.0f);
+
+			if (fast_hash(tcx, 59, tcz, world_seed) < 0.35f) {
+				int rgx = tcx * CELL + 10 + (int)(fast_hash(tcx, 61, tcz, world_seed) * 12.0f);
+				int rgz = tcz * CELL + 62 + (int)(fast_hash(tcx, 67, tcz, world_seed) * 12.0f);
 				if (rgx + 10 >= gx_min && rgx - 10 < gx_min + size_x && rgz + 10 >= gz_min && rgz - 10 < gz_min + size_z) {
 					int ry_base = get_global_terrain_y(rgx, rgz, world_seed);
 					for (int dz = -7; dz <= 7; ++dz)
