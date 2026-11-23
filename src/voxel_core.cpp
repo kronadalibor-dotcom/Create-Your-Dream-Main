@@ -211,7 +211,8 @@ void VoxelBody3D::rebuild_mesh() {
 	bool has_dur = (!is_sleeping && voxel_durability.size() == voxel_ids.size());
 	const int32_t* dur_r = has_dur ? voxel_durability.ptr() : nullptr;
 	const float s = voxel_scale; int y_lim = MIN(size_y - 1, max_filled_y);
-	int y_solid_bottom = (is_terrain_chunk && is_sleeping) ? MAX(1, min_terrain_y - 1) : 0;
+	// KRITIKUS JAVÍTÁS: Ha a szektor ébren van (!is_sleeping, azaz bányászunk benne), y_solid_bottom = 0, így SOHA nem lesz lyukas a gödör alja!
+	int y_solid_bottom = (is_terrain_chunk && is_sleeping) ? MAX(1, min_terrain_y - 2) : 0;
 	int surf_band_top = MIN(y_lim, max_terrain_y + 2);
 
 	auto get_key = [&](int x, int y, int z, int idx) -> uint16_t {
@@ -221,9 +222,11 @@ void VoxelBody3D::rebuild_mesh() {
 			int32_t md = PixelDatabase::get_pixel_fast(id).max_durability;
 			hp_b = (md > 0) ? CLAMP((dur_r[idx] * 4) / md, 1, 4) : 4;
 		}
-		int grain = (id == 34 || id == 33) ? ((int)(cyd_fast_hash(x, y / 3, z, 11) * 3.0f)) : ((int)(cyd_fast_hash(x, y, z, 17) * 3.0f));
+		int grain = 1;
+		if (id == 34 || id == 33 || id == 36) grain = (int)(cyd_fast_hash(x, y / 3, z, 11) * 3.0f);
+		else if (id == 35) grain = (int)(cyd_fast_hash(x >> 2, y >> 2, z >> 2, 17) * 2.0f);
+		else if (id == 51 || id == 1 || id == 17) grain = (int)(cyd_fast_hash(x >> 3, y >> 2, z >> 3, 17) * 2.0f);
 		if (y + 1 < size_y && (ids_r[get_index(MIN(size_x-1,x+1), y+1, z)] != 0 || ids_r[get_index(x, y+1, MIN(size_z-1,z+1))] != 0)) grain = MAX(0, grain - 1);
-		if (id == 35 && y + 2 < size_y && ids_r[get_index(x, y + 2, z)] != 0) grain = MAX(0, grain - 1);
 		uint16_t shade = (uint16_t)CLAMP(hp_b * 2 + grain - 2, 1, 7);
 		return ((uint16_t)id << 3) | shade;
 	};
@@ -288,7 +291,7 @@ void VoxelBody3D::rebuild_mesh() {
 				for (int y = y_solid_bottom; y <= z_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
-						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x, y, z + dz_s)] == 0);
+						bool exposed = at_border ? (!is_sleeping || y > neighbor_surf_y) : (ids_r[get_index(x, y, z + dz_s)] == 0);
 						if (exposed) { k = get_key(x, y, z, idx); any = true; }
 					}
 					mask_xy[x + y * size_x] = k;
@@ -326,7 +329,7 @@ void VoxelBody3D::rebuild_mesh() {
 				for (int y = y_solid_bottom; y <= x_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
-						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x + dx_s, y, z)] == 0);
+						bool exposed = at_border ? (!is_sleeping || y > neighbor_surf_y) : (ids_r[get_index(x + dx_s, y, z)] == 0);
 						if (exposed) { k = get_key(x, y, z, idx); any = true; }
 					}
 					mask_zy[z + y * size_z] = k;
