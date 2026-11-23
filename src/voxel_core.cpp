@@ -211,7 +211,8 @@ void VoxelBody3D::rebuild_mesh() {
 	bool has_dur = (!is_sleeping && voxel_durability.size() == voxel_ids.size());
 	const int32_t* dur_r = has_dur ? voxel_durability.ptr() : nullptr;
 	const float s = voxel_scale; int y_lim = MIN(size_y - 1, max_filled_y);
-	int y_solid_bottom = is_terrain_chunk ? MAX(1, min_terrain_y - 4) : 0;
+	// KRITIKUS JAVÍTÁS: Ha a szektor ébren van (!is_sleeping, azaz bányászunk benne), y_solid_bottom = 0, így SOHA nem lesz lyukas a gödör alja!
+	int y_solid_bottom = (is_terrain_chunk && is_sleeping) ? MAX(1, min_terrain_y - 2) : 0;
 	int surf_band_top = MIN(y_lim, max_terrain_y + 2);
 
 	auto get_key = [&](int x, int y, int z, int idx) -> uint16_t {
@@ -245,7 +246,7 @@ void VoxelBody3D::rebuild_mesh() {
 		int dy = (dir == 0) ? 1 : -1; float dl = (dir == 0) ? 0.96f : 0.45f;
 		for (int y = y_solid_bottom; y <= y_lim; ++y) {
 			int x0_b = 0, x1_b = size_x - 1, z0_b = 0, z1_b = size_z - 1;
-			if (is_terrain_chunk && y > surf_band_top) {
+			if (is_terrain_chunk && is_sleeping && y > surf_band_top) {
 				if (high_max_x < high_min_x) break;
 				x0_b = MAX(0, high_min_x); x1_b = MIN(size_x - 1, high_max_x);
 				z0_b = MAX(0, high_min_z); z1_b = MIN(size_z - 1, high_max_z);
@@ -284,13 +285,13 @@ void VoxelBody3D::rebuild_mesh() {
 		int dz_s = (dir == 0) ? 1 : -1; float dl = (dir == 0) ? 0.85f : 0.66f;
 		for (int z = 0; z < size_z; ++z) {
 			bool any = false, at_border = (z + dz_s < 0 || z + dz_s >= size_z);
-			int z_ylim = (is_terrain_chunk && (z < high_min_z - 1 || z > high_max_z + 1)) ? surf_band_top : y_lim;
+			int z_ylim = (is_terrain_chunk && is_sleeping && (z < high_min_z - 1 || z > high_max_z + 1)) ? surf_band_top : y_lim;
 			for (int x = 0; x < size_x; ++x) {
 				int neighbor_surf_y = (is_terrain_chunk && at_border) ? cyd_get_global_terrain_y(chunk_gx_origin + x, chunk_gz_origin + z + dz_s, cached_world_seed) : -1;
 				for (int y = y_solid_bottom; y <= z_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
-						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x, y, z + dz_s)] == 0);
+						bool exposed = at_border ? (!is_sleeping || y > neighbor_surf_y) : (ids_r[get_index(x, y, z + dz_s)] == 0);
 						if (exposed) { k = get_key(x, y, z, idx); any = true; }
 					}
 					mask_xy[x + y * size_x] = k;
@@ -322,13 +323,13 @@ void VoxelBody3D::rebuild_mesh() {
 		int dx_s = (dir == 0) ? 1 : -1; float dl = (dir == 0) ? 0.78f : 0.72f;
 		for (int x = 0; x < size_x; ++x) {
 			bool any = false, at_border = (x + dx_s < 0 || x + dx_s >= size_x);
-			int x_ylim = (is_terrain_chunk && (x < high_min_x - 1 || x > high_max_x + 1)) ? surf_band_top : y_lim;
+			int x_ylim = (is_terrain_chunk && is_sleeping && (x < high_min_x - 1 || x > high_max_x + 1)) ? surf_band_top : y_lim;
 			for (int z = 0; z < size_z; ++z) {
 				int neighbor_surf_y = (is_terrain_chunk && at_border) ? cyd_get_global_terrain_y(chunk_gx_origin + x + dx_s, chunk_gz_origin + z, cached_world_seed) : -1;
 				for (int y = y_solid_bottom; y <= x_ylim; ++y) {
 					int idx = get_index(x, y, z); uint16_t k = 0;
 					if (ids_r[idx] != 0) {
-						bool exposed = at_border ? (y > neighbor_surf_y) : (ids_r[get_index(x + dx_s, y, z)] == 0);
+						bool exposed = at_border ? (!is_sleeping || y > neighbor_surf_y) : (ids_r[get_index(x + dx_s, y, z)] == 0);
 						if (exposed) { k = get_key(x, y, z, idx); any = true; }
 					}
 					mask_zy[z + y * size_z] = k;
